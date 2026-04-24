@@ -2,10 +2,9 @@ from uuid import UUID
 from decimal import Decimal
 from datetime import datetime
 from pydantic import BaseModel, field_validator
-from typing import Literal
 
 
-class _DepotInitierBase(BaseModel):
+class DepotInitierMtn(BaseModel):
     locataire_id: UUID
     montant: Decimal
     telephone: str
@@ -16,14 +15,6 @@ class _DepotInitierBase(BaseModel):
         if v < Decimal("500"):
             raise ValueError("Le montant minimum est de 500 FCFA")
         return v
-
-
-class DepotInitierFedapay(_DepotInitierBase):
-    operateur: Literal["MTN", "MOOV"]
-
-
-class DepotInitierKkiapay(_DepotInitierBase):
-    pass
 
 
 class DepotWalletRead(BaseModel):
@@ -40,7 +31,7 @@ class DepotWalletRead(BaseModel):
 
 class DepotResponse(BaseModel):
     depot_id: UUID
-    payment_url: str
+    payment_url: str | None
     reference: str
     montant: Decimal
     provider: str

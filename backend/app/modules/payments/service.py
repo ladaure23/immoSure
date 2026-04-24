@@ -1,4 +1,5 @@
 import uuid
+import json
 from decimal import Decimal
 from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +11,8 @@ from app.models.locataire import Locataire
 from app.models.contrat import Contrat
 from app.models.bien import Bien
 from app.schemas.transaction import TransactionRead, DashboardStats, TopBienStats
-from app.schemas.depot_wallet import DepotInitierFedapay, DepotInitierKkiapay, DepotResponse
+from app.schemas.depot_wallet import DepotInitierMtn, DepotResponse
+from app.modules.payments.providers.factory import get_provider
 
 
 async def list_transactions(db: AsyncSession) -> list[Transaction]:
@@ -51,13 +53,11 @@ async def get_dashboard_stats(db: AsyncSession) -> DashboardStats:
     )
     total_actifs = actifs_result.scalar() or 1
 
-    # fix: func.distinct() — Transaction.id.distinct() n'existe pas en SQLAlchemy 2.0
     payes_result = await db.execute(
         select(func.count(func.distinct(Transaction.id)))
         .where(Transaction.mois_concerne >= debut_mois, Transaction.statut == "complete")
     )
     payes = payes_result.scalar() or 0
-    # fix: cap à 100% — possible si plusieurs transactions pour un même contrat
     taux_recouvrement = Decimal(str(min(100, round((payes / total_actifs) * 100, 2))))
 
     attente_result = await db.execute(
@@ -70,7 +70,6 @@ async def get_dashboard_stats(db: AsyncSession) -> DashboardStats:
     )
     echoues = echec_result.scalar() or 0
 
-    # fix: double JOIN explicite — .in_(subquery) comme condition de join donnait de faux résultats
     top_result = await db.execute(
         select(
             Bien.id,
@@ -101,87 +100,68 @@ async def get_dashboard_stats(db: AsyncSession) -> DashboardStats:
     )
 
 
-async def initier_depot_fedapay(payload: DepotInitierFedapay, db: AsyncSession) -> DepotResponse:
-    # Intégration FedaPay complète à l'étape 4 — stub fonctionnel pour les tests
+async def initier_depot_mtn(payload: DepotInitierMtn, db: AsyncSession) -> DepotResponse:
     depot = DepotWallet(
         locataire_id=payload.locataire_id,
         montant=payload.montant,
-        provider="fedapay",
+        provider="mtn",
         statut="en_attente",
         reference_provider=None,
     )
     db.add(depot)
-    await db.commit()
-    await db.refresh(depot)
-    return DepotResponse(
-        depot_id=depot.id,
-        payment_url="https://sandbox.fedapay.com/pay/stub",
-        reference=str(depot.id),
-        montant=depot.montant,
-        provider="fedapay",
-    )
+    await db.flush()  # obtenir depot.id avant d'appeler l'API MTN
 
-
-async def initier_depot_kkiapay(payload: DepotInitierKkiapay, db: AsyncSession) -> DepotResponse:
-    # Intégration KKiaPay complète à l'étape 4 — stub fonctionnel pour les tests
-    depot = DepotWallet(
-        locataire_id=payload.locataire_id,
+    provider = get_provider("mtn")
+    result = await provider.initier_paiement(
         montant=payload.montant,
-        provider="kkiapay",
-        statut="en_attente",
-        reference_provider=None,
+        telephone=payload.telephone,
+        depot_id=str(depot.id),
     )
-    db.add(depot)
+    depot.reference_provider = result.reference
     await db.commit()
     await db.refresh(depot)
     return DepotResponse(
         depot_id=depot.id,
-        payment_url="https://sandbox.kkiapay.me/pay/stub",
-        reference=str(depot.id),
+        payment_url=result.payment_url or None,
+        reference=result.reference,
         montant=depot.montant,
-        provider="kkiapay",
+        provider="mtn",
     )
 
 
-async def handle_webhook_fedapay(body: dict, db: AsyncSession) -> dict:
-    # Traitement complet à l'étape 4 (vérification signature HMAC, crédit wallet)
-    reference = body.get("transaction", {}).get("id") or body.get("reference")
-    if not reference:
+async def handle_webhook_mtn(raw: bytes, db: AsyncSession) -> dict:
+    try:
+        body = json.loads(raw)
+    except Exception:
         return {"status": "ignored"}
+
+    external_id = body.get("externalId")
+    mtn_status = body.get("status")
+
+    if not external_id or not mtn_status:
+        return {"status": "ignored"}
+
+    try:
+        depot_uuid = uuid.UUID(external_id)
+    except (ValueError, AttributeError):
+        return {"status": "ignored"}
+
     result = await db.execute(
-        select(DepotWallet).where(DepotWallet.reference_provider == str(reference))
+        select(DepotWallet).where(DepotWallet.id == depot_uuid)
     )
     depot = result.scalar_one_or_none()
-    # fix: vérifier statut == "en_attente" pour idempotence (providers rejouent les webhooks)
-    if depot and depot.statut == "en_attente" and body.get("transaction", {}).get("status") == "approved":
-        depot.statut = "complete"
-        locataire_result = await db.execute(
-            select(Locataire).where(Locataire.id == depot.locataire_id)
-        )
-        locataire = locataire_result.scalar_one_or_none()
-        if locataire:
-            locataire.wallet_solde += depot.montant
-        await db.commit()
-    return {"status": "ok"}
 
-
-async def handle_webhook_kkiapay(body: dict, signature: str | None, db: AsyncSession) -> dict:
-    # Vérification signature et traitement complet à l'étape 4
-    reference = body.get("transactionId")
-    if not reference:
-        return {"status": "ignored"}
-    result = await db.execute(
-        select(DepotWallet).where(DepotWallet.reference_provider == str(reference))
-    )
-    depot = result.scalar_one_or_none()
-    # fix: vérifier statut == "en_attente" pour idempotence
-    if depot and depot.statut == "en_attente" and body.get("status") == "SUCCESS":
-        depot.statut = "complete"
-        locataire_result = await db.execute(
-            select(Locataire).where(Locataire.id == depot.locataire_id)
-        )
-        locataire = locataire_result.scalar_one_or_none()
-        if locataire:
-            locataire.wallet_solde += depot.montant
+    if depot and depot.statut == "en_attente":
+        if mtn_status == "SUCCESSFUL":
+            depot.statut = "complete"
+            locataire_result = await db.execute(
+                select(Locataire).where(Locataire.id == depot.locataire_id)
+            )
+            locataire = locataire_result.scalar_one_or_none()
+            if locataire:
+                locataire.wallet_solde += depot.montant
+        elif mtn_status == "FAILED":
+            depot.statut = "echoue"
         await db.commit()
+
     return {"status": "ok"}

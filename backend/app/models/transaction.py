@@ -19,7 +19,7 @@ class Transaction(Base):
     part_maintenance: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     statut: Mapped[str] = mapped_column(String(20), nullable=False, default="en_attente")  # en_attente/complete/echoue
     reference_paiement: Mapped[str | None] = mapped_column(String(200))
-    provider: Mapped[str | None] = mapped_column(String(50))  # fedapay/kkiapay
+    provider: Mapped[str | None] = mapped_column(String(50))  # mtn / ...
     mois_concerne: Mapped[date] = mapped_column(Date, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
