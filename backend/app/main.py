@@ -19,6 +19,7 @@ from app.modules.biens.router import router as biens_router
 from app.modules.contrats.router import router as contrats_router
 from app.modules.payments.router import router as payments_router
 from app.modules.tickets.router import router as tickets_router
+from app.modules.pdf.router import router as pdf_router
 from app.modules.telegram.bot import build_application as build_telegram_app
 from app.modules.scheduler.setup import create_scheduler
 
@@ -106,6 +107,7 @@ app.include_router(biens_router)
 app.include_router(contrats_router)
 app.include_router(payments_router)
 app.include_router(tickets_router)
+app.include_router(pdf_router)
 
 
 @app.get("/api/health")
