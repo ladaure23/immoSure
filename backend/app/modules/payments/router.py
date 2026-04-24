@@ -2,10 +2,11 @@ import uuid
 from fastapi import APIRouter, Depends, Request, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
-from app.middleware.auth import get_current_user
-from app.schemas.transaction import TransactionRead, DashboardStats
+from app.middleware.auth import get_current_user, require_admin
+from app.schemas.transaction import TransactionRead, DashboardStats, PaiementResultat, BatchPaiementResultat
 from app.schemas.depot_wallet import DepotInitierFedapay, DepotInitierKkiapay, DepotResponse
 from app.modules.payments import service
+from app.modules.payments import split_service
 
 router = APIRouter(tags=["payments"])
 
@@ -71,7 +72,31 @@ async def webhook_kkiapay(
     return await service.handle_webhook_kkiapay(body, x_kkiapay_signature, db)
 
 
+# --- Split / paiements automatiques (admin uniquement) ---
+
+split_router = APIRouter(prefix="/api", tags=["split"])
+
+
+@split_router.post(
+    "/contrats/{contrat_id}/payer",
+    response_model=PaiementResultat,
+    dependencies=[Depends(require_admin)],
+)
+async def payer_contrat(contrat_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    return await split_service.executer_paiement_contrat(contrat_id, db)
+
+
+@split_router.post(
+    "/paiements/executer-jour",
+    response_model=BatchPaiementResultat,
+    dependencies=[Depends(require_admin)],
+)
+async def executer_paiements_du_jour(db: AsyncSession = Depends(get_db)):
+    return await split_service.executer_paiements_du_jour(db)
+
+
 # Inclure tous les sous-routers dans router principal
 router.include_router(transactions_router)
 router.include_router(wallet_router)
 router.include_router(webhooks_router)
+router.include_router(split_router)
