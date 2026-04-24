@@ -22,6 +22,7 @@ from app.models.bien import Bien
 from app.models.locataire import Locataire
 from app.models.transaction import Transaction
 from app.schemas.transaction import PaiementResultat, BatchPaiementResultat
+from app.modules.telegram.notifications import send_notification
 
 _TAUX_PROPRIETAIRE = Decimal("89")
 _TAUX_AGENCE = Decimal("8")
@@ -103,9 +104,13 @@ async def executer_paiement_contrat(
         locataire.score_fiabilite = min(100, locataire.score_fiabilite + 1)
         transaction_statut = "complete"
     else:
-        # Wallet insuffisant — on enregistre l'échec sans débiter
         locataire.score_fiabilite = max(0, locataire.score_fiabilite - 5)
         transaction_statut = "echoue"
+
+    # Capturer avant commit (les objets SQLAlchemy expirent après commit)
+    chat_id = locataire.telegram_chat_id
+    solde_dispo = locataire.wallet_solde
+    adresse = bien.adresse
 
     transaction = Transaction(
         contrat_id=contrat_id,
@@ -116,6 +121,18 @@ async def executer_paiement_contrat(
     )
     db.add(transaction)
     await db.commit()
+
+    if transaction_statut == "complete":
+        await send_notification(
+            chat_id,
+            f"Loyer de {montant:,.0f} FCFA payé pour {adresse}.",
+        )
+    else:
+        await send_notification(
+            chat_id,
+            f"Paiement échoué : solde insuffisant "
+            f"({solde_dispo:,.0f} FCFA disponible, {montant:,.0f} FCFA requis).",
+        )
 
     return PaiementResultat(
         contrat_id=contrat_id,

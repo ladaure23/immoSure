@@ -1,13 +1,13 @@
 import uuid
 import json
 import logging
+from datetime import date
 from decimal import Decimal
 
-logger = logging.getLogger(__name__)
-from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from fastapi import HTTPException, status
+
 from app.models.transaction import Transaction
 from app.models.depot_wallet import DepotWallet
 from app.models.locataire import Locataire
@@ -16,6 +16,9 @@ from app.models.bien import Bien
 from app.schemas.transaction import TransactionRead, DashboardStats, TopBienStats
 from app.schemas.depot_wallet import DepotInitierMtn, DepotResponse
 from app.modules.payments.providers.factory import get_provider
+from app.modules.telegram.notifications import send_notification
+
+logger = logging.getLogger(__name__)
 
 
 async def list_transactions(db: AsyncSession) -> list[Transaction]:
@@ -169,9 +172,18 @@ async def handle_webhook_mtn(raw: bytes, db: AsyncSession) -> dict:
                 select(Locataire).where(Locataire.id == depot.locataire_id)
             )
             locataire = locataire_result.scalar_one_or_none()
+            chat_id = None
+            montant_credite = depot.montant
             if locataire:
                 locataire.wallet_solde += depot.montant
+                chat_id = locataire.telegram_chat_id
                 logger.info("Wallet crédité: locataire %s +%s XOF (depot %s)", locataire.id, depot.montant, depot.id)
+            await db.commit()
+            await send_notification(
+                chat_id,
+                f"Dépôt de {montant_credite:,.0f} FCFA crédité sur votre portefeuille ImmoSure.",
+            )
+            return {"status": "ok"}
         elif mtn_status == "FAILED":
             depot.statut = "echoue"
             logger.info("Dépôt échoué: depot %s", depot.id)
