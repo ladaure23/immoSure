@@ -37,3 +37,18 @@ class DashboardStats(BaseModel):
     transactions_en_attente: int
     transactions_echouees: int
     top_biens: list[TopBienStats]
+
+
+class PaiementResultat(BaseModel):
+    contrat_id: UUID
+    statut: Literal["complete", "echoue", "ignore"]
+    montant: Decimal | None = None
+    raison: str | None = None
+
+
+class BatchPaiementResultat(BaseModel):
+    traites: int
+    reussis: int
+    echoues: int
+    ignores: int
+    details: list[PaiementResultat]
