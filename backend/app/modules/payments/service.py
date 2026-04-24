@@ -1,15 +1,13 @@
 import uuid
 import json
 import logging
+from datetime import date
 from decimal import Decimal
 
-from app.modules.telegram.notifications import send_notification
-
-logger = logging.getLogger(__name__)
-from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from fastapi import HTTPException, status
+
 from app.models.transaction import Transaction
 from app.models.depot_wallet import DepotWallet
 from app.models.locataire import Locataire
@@ -18,6 +16,9 @@ from app.models.bien import Bien
 from app.schemas.transaction import TransactionRead, DashboardStats, TopBienStats
 from app.schemas.depot_wallet import DepotInitierMtn, DepotResponse
 from app.modules.payments.providers.factory import get_provider
+from app.modules.telegram.notifications import send_notification
+
+logger = logging.getLogger(__name__)
 
 
 async def list_transactions(db: AsyncSession) -> list[Transaction]:

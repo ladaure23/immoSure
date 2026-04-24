@@ -1,5 +1,4 @@
 import logging
-from decimal import Decimal
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -20,14 +19,6 @@ from app.modules.payments.split_service import executer_paiement_contrat
 logger = logging.getLogger(__name__)
 
 PHONE_INPUT = 0  # état ConversationHandler /start
-
-
-async def _get_locataire(chat_id: str):
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(
-            select(Locataire).where(Locataire.telegram_chat_id == chat_id)
-        )
-        return result.scalar_one_or_none()
 
 
 # --- /start ---
@@ -82,14 +73,16 @@ async def solde_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             select(Locataire).where(Locataire.telegram_chat_id == chat_id)
         )
         locataire = result.scalar_one_or_none()
-
-    if not locataire:
-        await update.message.reply_text("Compte non lié. Utilisez /start pour vous enregistrer.")
-        return
+        if not locataire:
+            await update.message.reply_text("Compte non lié. Utilisez /start pour vous enregistrer.")
+            return
+        # Capturer avant fermeture de session
+        solde = locataire.wallet_solde
+        score = locataire.score_fiabilite
 
     await update.message.reply_text(
-        f"Solde portefeuille : {locataire.wallet_solde:,.0f} FCFA\n"
-        f"Score de fiabilité : {locataire.score_fiabilite}/100"
+        f"Solde portefeuille : {solde:,.0f} FCFA\n"
+        f"Score de fiabilité : {score}/100"
     )
 
 
@@ -111,18 +104,17 @@ async def contrats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             .join(Bien, Contrat.bien_id == Bien.id)
             .where(Contrat.locataire_id == locataire.id, Contrat.statut == "actif")
         )
-        rows = contrats_result.all()
+        # Capturer les données brutes avant fermeture de session
+        lignes = [
+            f"- {bien.adresse}\n"
+            f"  Loyer : {contrat.loyer_montant:,.0f} FCFA  |  Échéance : J-{contrat.jour_echeance}"
+            for contrat, bien in contrats_result.all()
+        ]
 
-    if not rows:
+    if not lignes:
         await update.message.reply_text("Aucun contrat actif.")
         return
 
-    lignes = []
-    for contrat, bien in rows:
-        lignes.append(
-            f"- {bien.adresse}\n"
-            f"  Loyer : {contrat.loyer_montant:,.0f} FCFA  |  Échéance : J-{contrat.jour_echeance}"
-        )
     await update.message.reply_text("Vos contrats actifs :\n\n" + "\n\n".join(lignes))
 
 
@@ -145,20 +137,18 @@ async def payer_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 Contrat.statut == "actif",
             )
         )
-        contrats = list(contrats_result.scalars().all())
+        contrat_ids = [c.id for c in contrats_result.scalars().all()]
 
-    if not contrats:
+    if not contrat_ids:
         await update.message.reply_text("Aucun contrat actif à payer.")
         return
 
-    await update.message.reply_text(
-        f"Traitement de {len(contrats)} contrat(s) en cours..."
-    )
+    await update.message.reply_text(f"Traitement de {len(contrat_ids)} contrat(s) en cours...")
 
     reussis, echoues = 0, 0
-    for contrat in contrats:
+    for contrat_id in contrat_ids:
         async with AsyncSessionLocal() as db:
-            resultat = await executer_paiement_contrat(contrat.id, db)
+            resultat = await executer_paiement_contrat(contrat_id, db)
         if resultat.statut == "complete":
             reussis += 1
         elif resultat.statut == "echoue":
