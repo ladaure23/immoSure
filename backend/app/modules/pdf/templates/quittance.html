@@ -156,7 +156,7 @@
 <div class="montant-box">
   <div class="label">Loyer du mois de {{ mois_label }}</div>
   <div class="amount">{{ "{:,.0f}".format(transaction.montant_total).replace(",", " ") }} FCFA</div>
-  <div class="date">Payé le {{ transaction.created_at.strftime("%d/%m/%Y") }}</div>
+  <div class="date">Payé le {{ date_paiement }}</div>
 </div>
 
 <div class="repartition">
