@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+env/
+.env
+*.log
+
+# Alembic
+migrations/versions/*.pyc
+
+# Node / Frontend
+node_modules/
+frontend/dist/
+frontend/.env
+.npm/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets & uploads
+.env
+uploads/
+/uploads/
+
+# PM2
+.pm2/
