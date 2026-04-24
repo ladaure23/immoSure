@@ -7,8 +7,8 @@ ALEMBIC     := $(VENV)/bin/alembic
 .PHONY: install dev build migrate deploy logs test lint clean
 
 install: ## Install all dependencies (Python + Node)
-	cd backend && python3.11 -m venv $(VENV) && $(PIP) install --upgrade pip
-	cd backend && $(PIP) install -r requirements.txt
+	python3.11 -m venv $(VENV) && $(PIP) install --upgrade pip
+	$(PIP) install -r backend/requirements.txt
 	cd frontend && npm ci
 
 dev: ## Start backend (hot-reload) + frontend (Vite dev server) in parallel
