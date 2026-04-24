@@ -54,11 +54,12 @@ BEGIN
   END IF;
 END
 \$\$;
-CREATE DATABASE IF NOT EXISTS ${DB_NAME} OWNER ${DB_USER};
+SELECT 'CREATE DATABASE ${DB_NAME} OWNER ${DB_USER}'
+  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '${DB_NAME}')\gexec
 GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};
 SQL
 
-log "PostgreSQL DB '${DB_NAME}' ready. Password: ${DB_PASS}"
+log "PostgreSQL DB '${DB_NAME}' ready."
 
 # ─── Node.js 20 ───────────────────────────────────────────────
 log "Installing Node.js 20..."
