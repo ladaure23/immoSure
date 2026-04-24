@@ -1,10 +1,10 @@
 import uuid
-from fastapi import APIRouter, Depends, Request, Header
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.middleware.auth import get_current_user, require_admin
 from app.schemas.transaction import TransactionRead, DashboardStats, PaiementResultat, BatchPaiementResultat
-from app.schemas.depot_wallet import DepotInitierFedapay, DepotInitierKkiapay, DepotResponse
+from app.schemas.depot_wallet import DepotInitierMtn, DepotResponse
 from app.modules.payments import service
 from app.modules.payments import split_service
 
@@ -41,35 +41,20 @@ wallet_router = APIRouter(
 )
 
 
-@wallet_router.post("/depot/fedapay", response_model=DepotResponse, status_code=201)
-async def initier_depot_fedapay(payload: DepotInitierFedapay, db: AsyncSession = Depends(get_db)):
-    return await service.initier_depot_fedapay(payload, db)
+@wallet_router.post("/depot/mtn", response_model=DepotResponse, status_code=201)
+async def initier_depot_mtn(payload: DepotInitierMtn, db: AsyncSession = Depends(get_db)):
+    return await service.initier_depot_mtn(payload, db)
 
 
-@wallet_router.post("/depot/kkiapay", response_model=DepotResponse, status_code=201)
-async def initier_depot_kkiapay(payload: DepotInitierKkiapay, db: AsyncSession = Depends(get_db)):
-    return await service.initier_depot_kkiapay(payload, db)
-
-
-# --- Webhooks (sans JWT — appelés par les providers de paiement) ---
+# --- Webhooks (sans JWT — appelés par MTN) ---
 
 webhooks_router = APIRouter(prefix="/api/wallet")
 
 
-@webhooks_router.post("/webhook/fedapay")
-async def webhook_fedapay(request: Request, db: AsyncSession = Depends(get_db)):
-    body = await request.json()
-    return await service.handle_webhook_fedapay(body, db)
-
-
-@webhooks_router.post("/webhook/kkiapay")
-async def webhook_kkiapay(
-    request: Request,
-    x_kkiapay_signature: str | None = Header(default=None),
-    db: AsyncSession = Depends(get_db),
-):
-    body = await request.json()
-    return await service.handle_webhook_kkiapay(body, x_kkiapay_signature, db)
+@webhooks_router.post("/webhook/mtn")
+async def webhook_mtn(request: Request, db: AsyncSession = Depends(get_db)):
+    raw = await request.body()
+    return await service.handle_webhook_mtn(raw, db)
 
 
 # --- Split / paiements automatiques (admin uniquement) ---

@@ -18,17 +18,11 @@ class Settings(BaseSettings):
     # Database
     database_url: str
 
-    # FedaPay
-    fedapay_secret_key: str = ""
-    fedapay_public_key: str = ""
-    fedapay_webhook_secret: str = ""
-    fedapay_env: Literal["sandbox", "live"] = "sandbox"
-
-    # KKiaPay
-    kkiapay_private_key: str = ""
-    kkiapay_public_key: str = ""
-    kkiapay_secret: str = ""
-    kkiapay_sandbox: bool = True
+    # MTN Mobile Money
+    mtn_subscription_key: str = ""
+    mtn_api_user: str = ""
+    mtn_api_key: str = ""
+    mtn_env: Literal["sandbox", "production"] = "sandbox"
 
     # Telegram
     telegram_bot_token: str = ""
@@ -45,16 +39,10 @@ class Settings(BaseSettings):
     notification_minute: int = 0
 
     @property
-    def fedapay_base_url(self) -> str:
-        if self.fedapay_env == "live":
-            return "https://api.fedapay.com/v1"
-        return "https://sandbox-api.fedapay.com/v1"
-
-    @property
-    def kkiapay_base_url(self) -> str:
-        if self.kkiapay_sandbox:
-            return "https://api-sandbox.kkiapay.me"
-        return "https://api.kkiapay.me"
+    def mtn_base_url(self) -> str:
+        if self.mtn_env == "sandbox":
+            return "https://sandbox.momodeveloper.mtn.com"
+        return "https://proxy.momoapi.mtn.com"
 
     @property
     def is_production(self) -> bool:

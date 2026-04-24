@@ -1,11 +1,11 @@
+import re
 from uuid import UUID
 from decimal import Decimal
 from datetime import datetime
 from pydantic import BaseModel, field_validator
-from typing import Literal
 
 
-class _DepotInitierBase(BaseModel):
+class DepotInitierMtn(BaseModel):
     locataire_id: UUID
     montant: Decimal
     telephone: str
@@ -17,13 +17,12 @@ class _DepotInitierBase(BaseModel):
             raise ValueError("Le montant minimum est de 500 FCFA")
         return v
 
-
-class DepotInitierFedapay(_DepotInitierBase):
-    operateur: Literal["MTN", "MOOV"]
-
-
-class DepotInitierKkiapay(_DepotInitierBase):
-    pass
+    @field_validator("telephone")
+    @classmethod
+    def telephone_msisdn(cls, v: str) -> str:
+        if not re.match(r"^\+?[0-9]{8,15}$", v):
+            raise ValueError("Format téléphone invalide (ex: +22961234567)")
+        return v
 
 
 class DepotWalletRead(BaseModel):
@@ -40,7 +39,7 @@ class DepotWalletRead(BaseModel):
 
 class DepotResponse(BaseModel):
     depot_id: UUID
-    payment_url: str
+    payment_url: str | None
     reference: str
     montant: Decimal
     provider: str

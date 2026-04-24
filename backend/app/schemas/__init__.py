@@ -4,7 +4,7 @@ from app.schemas.locataire import LocataireCreate, LocataireUpdate, LocataireRea
 from app.schemas.bien import BienCreate, BienUpdate, BienRead
 from app.schemas.contrat import ContratCreate, ContratUpdate, ContratRead, ContratRisque
 from app.schemas.transaction import TransactionRead, DashboardStats, TopBienStats
-from app.schemas.depot_wallet import DepotInitierFedapay, DepotInitierKkiapay, DepotWalletRead, DepotResponse
+from app.schemas.depot_wallet import DepotInitierMtn, DepotWalletRead, DepotResponse
 from app.schemas.notification import NotificationRead
 from app.schemas.ticket import TicketCreate, TicketUpdate, TicketRead
 from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserRead
@@ -16,7 +16,7 @@ __all__ = [
     "BienCreate", "BienUpdate", "BienRead",
     "ContratCreate", "ContratUpdate", "ContratRead", "ContratRisque",
     "TransactionRead", "DashboardStats", "TopBienStats",
-    "DepotInitierFedapay", "DepotInitierKkiapay", "DepotWalletRead", "DepotResponse",
+    "DepotInitierMtn", "DepotWalletRead", "DepotResponse",
     "NotificationRead",
     "TicketCreate", "TicketUpdate", "TicketRead",
     "LoginRequest", "RegisterRequest", "TokenResponse", "UserRead",

@@ -14,7 +14,7 @@ class DepotWallet(Base):
     locataire_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("locataires.id"), nullable=False)
     montant: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     reference_provider: Mapped[str | None] = mapped_column(String(200))
-    provider: Mapped[str] = mapped_column(String(50), nullable=False)  # fedapay/kkiapay
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)  # mtn / ...
     statut: Mapped[str] = mapped_column(String(20), nullable=False, default="en_attente")  # en_attente/complete/echoue
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
