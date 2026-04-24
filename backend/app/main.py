@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from loguru import logger
@@ -7,6 +7,18 @@ import sys
 
 from app.config import settings
 from app.database import engine, Base
+from app.middleware.logging import LoggingMiddleware
+from app.middleware.errors import validation_exception_handler, global_exception_handler
+from fastapi.exceptions import RequestValidationError
+
+from app.modules.auth.router import router as auth_router
+from app.modules.agences.router import router as agences_router
+from app.modules.proprietaires.router import router as proprietaires_router
+from app.modules.locataires.router import router as locataires_router
+from app.modules.biens.router import router as biens_router
+from app.modules.contrats.router import router as contrats_router
+from app.modules.payments.router import router as payments_router
+from app.modules.tickets.router import router as tickets_router
 
 
 @asynccontextmanager
@@ -27,7 +39,6 @@ app = FastAPI(
 )
 
 # CORS — allow_credentials=True est incompatible avec allow_origins=["*"]
-# En dev : origins explicites ; en prod : domaine de l'app uniquement
 _cors_origins = (
     ["http://localhost:3000", "http://127.0.0.1:3000"]
     if not settings.is_production
@@ -40,6 +51,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(LoggingMiddleware)
 
 # Logging setup — fichier log uniquement si le dossier existe (évite crash en dev)
 logger.remove()
@@ -57,6 +69,20 @@ if _log_file.parent.exists():
         level="INFO",
         compression="gz",
     )
+
+# Error handlers
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(Exception, global_exception_handler)
+
+# Routers
+app.include_router(auth_router)
+app.include_router(agences_router)
+app.include_router(proprietaires_router)
+app.include_router(locataires_router)
+app.include_router(biens_router)
+app.include_router(contrats_router)
+app.include_router(payments_router)
+app.include_router(tickets_router)
 
 
 @app.get("/api/health")
