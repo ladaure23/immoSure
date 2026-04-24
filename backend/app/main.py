@@ -20,6 +20,7 @@ from app.modules.contrats.router import router as contrats_router
 from app.modules.payments.router import router as payments_router
 from app.modules.tickets.router import router as tickets_router
 from app.modules.telegram.bot import build_application as build_telegram_app
+from app.modules.scheduler.setup import create_scheduler
 
 
 @asynccontextmanager
@@ -34,7 +35,13 @@ async def lifespan(app: FastAPI):
         await telegram_app.updater.start_polling()
         logger.info("Telegram bot démarré (polling)")
 
+    scheduler = create_scheduler()
+    scheduler.start()
+    logger.info("Scheduler démarré (timezone={tz})", tz=settings.scheduler_timezone)
+
     yield
+
+    scheduler.shutdown(wait=False)
 
     if telegram_app:
         await telegram_app.updater.stop()
