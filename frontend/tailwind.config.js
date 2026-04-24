@@ -4,29 +4,54 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: {
-          DEFAULT: "#0D6E3B",
-          50: "#E8F5EE",
-          100: "#C3E4D0",
-          500: "#0D6E3B",
-          600: "#0A5A30",
-          700: "#084525",
+        blue: {
+          DEFAULT: "#1a3c6e",
+          50:  "#eef2f9",
+          100: "#d5e0f0",
+          200: "#adc2e0",
+          300: "#7a9dcc",
+          400: "#4d7ab8",
+          500: "#2d5fa3",
+          600: "#1a3c6e",
+          700: "#132d54",
+          800: "#0d1f3b",
+          900: "#061223",
         },
-        secondary: {
-          DEFAULT: "#F5A623",
-          50: "#FEF6E6",
-          100: "#FDEAC0",
-          500: "#F5A623",
-          600: "#D48A0F",
+        green: {
+          DEFAULT: "#2ea043",
+          50:  "#edf8f0",
+          100: "#ccedda",
+          200: "#99dab5",
+          300: "#5ec484",
+          400: "#2ea043",
+          500: "#268a38",
+          600: "#1e722e",
+          700: "#155924",
+          800: "#0d401a",
+          900: "#06270f",
         },
-        danger: {
-          DEFAULT: "#D63031",
-          500: "#D63031",
-          600: "#B52829",
+        brand: {
+          blue: "#1a3c6e",
+          green: "#2ea043",
+          bg: "#f4f5f7",
         },
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],
+      },
+      animation: {
+        "fade-in": "fadeIn 0.5s ease forwards",
+        "slide-up": "slideUp 0.4s ease forwards",
+      },
+      keyframes: {
+        fadeIn: {
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" },
+        },
+        slideUp: {
+          "0%": { opacity: "0", transform: "translateY(16px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
       },
     },
   },
