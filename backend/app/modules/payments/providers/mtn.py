@@ -1,5 +1,6 @@
 import uuid
 import base64
+import time
 from decimal import Decimal
 import httpx
 from fastapi import HTTPException, status
@@ -8,7 +9,13 @@ from app.modules.payments.providers.base import PaymentProvider, InitiationResul
 
 
 class MtnProvider(PaymentProvider):
+    # Cache du token au niveau classe — valide 3600s, on renouvelle à 55min
+    _token: str | None = None
+    _token_expires_at: float = 0.0
+
     async def _get_token(self, client: httpx.AsyncClient) -> str:
+        if MtnProvider._token and time.time() < MtnProvider._token_expires_at:
+            return MtnProvider._token
         credentials = base64.b64encode(
             f"{settings.mtn_api_user}:{settings.mtn_api_key}".encode()
         ).decode()
@@ -24,7 +31,9 @@ class MtnProvider(PaymentProvider):
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f"MTN token error: {resp.text}",
             )
-        return resp.json()["access_token"]
+        MtnProvider._token = resp.json()["access_token"]
+        MtnProvider._token_expires_at = time.time() + 3300  # 55 min
+        return MtnProvider._token
 
     async def initier_paiement(
         self,
@@ -64,9 +73,22 @@ class MtnProvider(PaymentProvider):
                     detail=f"MTN MoMo error: {resp.text}",
                 )
             # MTN envoie un USSD push au téléphone — pas d'URL de redirection
-            return InitiationResult(payment_url="", reference=reference)
+            return InitiationResult(reference=reference)
 
     def verifier_signature_webhook(self, payload_bytes: bytes, signature: str | None) -> bool:
-        # MTN ne signe pas ses callbacks via HMAC
-        # La vérification se fait en re-fetchant le statut via GET /requesttopay/{reference}
-        return True
+        return True  # MTN ne signe pas ses callbacks — vérification via verifier_transaction
+
+    async def verifier_transaction(self, reference: str) -> bool:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            token = await self._get_token(client)
+            resp = await client.get(
+                f"{settings.mtn_base_url}/collection/v1_0/requesttopay/{reference}",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "X-Target-Environment": settings.mtn_env,
+                    "Ocp-Apim-Subscription-Key": settings.mtn_subscription_key,
+                },
+            )
+            if resp.status_code != 200:
+                return False
+            return resp.json().get("status") == "SUCCESSFUL"

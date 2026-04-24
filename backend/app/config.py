@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     mtn_subscription_key: str = ""
     mtn_api_user: str = ""
     mtn_api_key: str = ""
-    mtn_env: str = "sandbox"
+    mtn_env: Literal["sandbox", "production"] = "sandbox"
 
     # Telegram
     telegram_bot_token: str = ""

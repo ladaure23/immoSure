@@ -1,6 +1,9 @@
 import uuid
 import json
+import logging
 from decimal import Decimal
+
+logger = logging.getLogger(__name__)
 from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -153,6 +156,14 @@ async def handle_webhook_mtn(raw: bytes, db: AsyncSession) -> dict:
 
     if depot and depot.statut == "en_attente":
         if mtn_status == "SUCCESSFUL":
+            if not depot.reference_provider:
+                logger.warning("MTN webhook: depot %s sans reference_provider", depot.id)
+                return {"status": "rejected"}
+            provider = get_provider("mtn")
+            confirmed = await provider.verifier_transaction(depot.reference_provider)
+            if not confirmed:
+                logger.warning("MTN webhook: re-vérification échouée pour depot %s", depot.id)
+                return {"status": "rejected"}
             depot.statut = "complete"
             locataire_result = await db.execute(
                 select(Locataire).where(Locataire.id == depot.locataire_id)
@@ -160,8 +171,12 @@ async def handle_webhook_mtn(raw: bytes, db: AsyncSession) -> dict:
             locataire = locataire_result.scalar_one_or_none()
             if locataire:
                 locataire.wallet_solde += depot.montant
+                logger.info("Wallet crédité: locataire %s +%s XOF (depot %s)", locataire.id, depot.montant, depot.id)
         elif mtn_status == "FAILED":
             depot.statut = "echoue"
+            logger.info("Dépôt échoué: depot %s", depot.id)
         await db.commit()
+    else:
+        logger.info("MTN webhook ignoré: depot %s statut=%s", external_id, depot.statut if depot else "introuvable")
 
     return {"status": "ok"}

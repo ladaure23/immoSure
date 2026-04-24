@@ -1,3 +1,4 @@
+import re
 from uuid import UUID
 from decimal import Decimal
 from datetime import datetime
@@ -14,6 +15,13 @@ class DepotInitierMtn(BaseModel):
     def montant_minimum(cls, v: Decimal) -> Decimal:
         if v < Decimal("500"):
             raise ValueError("Le montant minimum est de 500 FCFA")
+        return v
+
+    @field_validator("telephone")
+    @classmethod
+    def telephone_msisdn(cls, v: str) -> str:
+        if not re.match(r"^\+?[0-9]{8,15}$", v):
+            raise ValueError("Format téléphone invalide (ex: +22961234567)")
         return v
 
 

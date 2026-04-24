@@ -21,3 +21,7 @@ class PaymentProvider(ABC):
 
     @abstractmethod
     def verifier_signature_webhook(self, payload_bytes: bytes, signature: str | None) -> bool: ...
+
+    async def verifier_transaction(self, reference: str) -> bool:
+        """Re-vérifie le statut côté provider avant de créditer. Override pour les providers sans HMAC."""
+        return True
