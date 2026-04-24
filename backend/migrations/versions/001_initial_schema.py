@@ -9,6 +9,8 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
 
+_uuid_default = sa.text("gen_random_uuid()")
+
 revision: str = "001"
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
@@ -18,7 +20,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     op.create_table(
         "agences",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
+        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=_uuid_default),
         sa.Column("raison_sociale", sa.String(200), nullable=False),
         sa.Column("registre_commerce", sa.String(100), unique=True),
         sa.Column("commission_taux", sa.Numeric(5, 2), nullable=False, server_default="8.00"),
@@ -31,7 +33,7 @@ def upgrade() -> None:
 
     op.create_table(
         "proprietaires",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
+        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=_uuid_default),
         sa.Column("nom", sa.String(100), nullable=False),
         sa.Column("prenom", sa.String(100), nullable=False),
         sa.Column("telephone", sa.String(20), unique=True, nullable=False),
@@ -46,7 +48,7 @@ def upgrade() -> None:
 
     op.create_table(
         "locataires",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
+        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=_uuid_default),
         sa.Column("nom", sa.String(100), nullable=False),
         sa.Column("prenom", sa.String(100), nullable=False),
         sa.Column("telephone", sa.String(20), unique=True, nullable=False),
@@ -59,7 +61,7 @@ def upgrade() -> None:
 
     op.create_table(
         "users",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
+        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=_uuid_default),
         sa.Column("email", sa.String(200), unique=True, nullable=False),
         sa.Column("password_hash", sa.String(200), nullable=False),
         sa.Column("role", sa.String(20), nullable=False, server_default="agence"),
@@ -69,9 +71,9 @@ def upgrade() -> None:
 
     op.create_table(
         "biens",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
+        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=_uuid_default),
         sa.Column("adresse", sa.String(500), nullable=False),
-        sa.Column("type", sa.String(50), nullable=False),
+        sa.Column("type_bien", sa.String(50), nullable=False),
         sa.Column("proprietaire_id", UUID(as_uuid=True), sa.ForeignKey("proprietaires.id"), nullable=False),
         sa.Column("agence_id", UUID(as_uuid=True), sa.ForeignKey("agences.id"), nullable=True),
         sa.Column("loyer_mensuel", sa.Numeric(12, 2), nullable=False),
@@ -81,7 +83,7 @@ def upgrade() -> None:
 
     op.create_table(
         "contrats",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
+        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=_uuid_default),
         sa.Column("bien_id", UUID(as_uuid=True), sa.ForeignKey("biens.id"), nullable=False),
         sa.Column("locataire_id", UUID(as_uuid=True), sa.ForeignKey("locataires.id"), nullable=False),
         sa.Column("date_debut", sa.Date, nullable=False),
@@ -94,7 +96,7 @@ def upgrade() -> None:
 
     op.create_table(
         "transactions",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
+        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=_uuid_default),
         sa.Column("contrat_id", UUID(as_uuid=True), sa.ForeignKey("contrats.id"), nullable=False),
         sa.Column("montant_total", sa.Numeric(12, 2), nullable=False),
         sa.Column("part_proprietaire", sa.Numeric(12, 2), nullable=False),
@@ -110,7 +112,7 @@ def upgrade() -> None:
 
     op.create_table(
         "depots_wallet",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
+        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=_uuid_default),
         sa.Column("locataire_id", UUID(as_uuid=True), sa.ForeignKey("locataires.id"), nullable=False),
         sa.Column("montant", sa.Numeric(12, 2), nullable=False),
         sa.Column("reference_provider", sa.String(200)),
@@ -121,7 +123,7 @@ def upgrade() -> None:
 
     op.create_table(
         "notifications",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
+        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=_uuid_default),
         sa.Column("destinataire_id", UUID(as_uuid=True), nullable=False),
         sa.Column("type_destinataire", sa.String(20), nullable=False),
         sa.Column("canal", sa.String(20), nullable=False),
@@ -135,9 +137,9 @@ def upgrade() -> None:
 
     op.create_table(
         "tickets",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
+        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=_uuid_default),
         sa.Column("contrat_id", UUID(as_uuid=True), sa.ForeignKey("contrats.id"), nullable=False),
-        sa.Column("type", sa.String(50), nullable=False),
+        sa.Column("type_ticket", sa.String(50), nullable=False),
         sa.Column("description", sa.Text, nullable=False),
         sa.Column("statut", sa.String(20), nullable=False, server_default="ouvert"),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),

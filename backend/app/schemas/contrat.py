@@ -39,6 +39,20 @@ class ContratUpdate(BaseModel):
     jour_echeance: int | None = None
     statut: Literal["actif", "resilie", "expire"] | None = None
 
+    @field_validator("jour_echeance")
+    @classmethod
+    def jour_valide(cls, v: int | None) -> int | None:
+        if v is not None and (v < 1 or v > 28):
+            raise ValueError("Le jour d'échéance doit être entre 1 et 28")
+        return v
+
+    @field_validator("loyer_montant")
+    @classmethod
+    def loyer_positif(cls, v: Decimal | None) -> Decimal | None:
+        if v is not None and v <= 0:
+            raise ValueError("Le loyer doit être positif")
+        return v
+
 
 class ContratRead(ContratBase):
     id: UUID

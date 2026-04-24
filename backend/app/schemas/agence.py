@@ -35,6 +35,13 @@ class AgenceUpdate(BaseModel):
     email: EmailStr | None = None
     statut_partenariat: str | None = None
 
+    @field_validator("commission_taux")
+    @classmethod
+    def taux_valide(cls, v: Decimal | None) -> Decimal | None:
+        if v is not None and (v < 0 or v > 100):
+            raise ValueError("Le taux de commission doit être entre 0 et 100")
+        return v
+
 
 class AgenceRead(AgenceBase):
     id: UUID

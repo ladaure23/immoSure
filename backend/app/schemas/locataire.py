@@ -1,7 +1,12 @@
+from __future__ import annotations
 from uuid import UUID
 from decimal import Decimal
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.schemas.depot_wallet import DepotWalletRead
 
 
 class LocataireBase(BaseModel):
@@ -37,12 +42,13 @@ class WalletInfo(BaseModel):
     locataire_id: UUID
     solde: Decimal
     loyer_mensuel: Decimal | None
-    taux_provisionnement: int  # 0-100
-    historique: list["DepotWalletRead"]
+    taux_provisionnement: int
+
+    @field_validator("taux_provisionnement")
+    @classmethod
+    def taux_borne(cls, v: int) -> int:
+        return max(0, min(100, v))
+
+    historique: list[DepotWalletRead]
 
     model_config = {"from_attributes": True}
-
-
-# Import différé pour éviter la circularité
-from app.schemas.depot_wallet import DepotWalletRead  # noqa: E402
-WalletInfo.model_rebuild()

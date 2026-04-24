@@ -1,6 +1,5 @@
 from uuid import UUID
 from pydantic import BaseModel, EmailStr
-from typing import Literal
 
 
 class LoginRequest(BaseModel):
@@ -12,7 +11,6 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
     agence_id: UUID | None = None
-    role: Literal["admin", "agence"] = "agence"
 
 
 class TokenResponse(BaseModel):

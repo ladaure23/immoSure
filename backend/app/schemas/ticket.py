@@ -4,9 +4,12 @@ from pydantic import BaseModel
 from typing import Literal
 
 
+TypeTicket = Literal["maintenance", "conflit", "difficulte_paiement"]
+
+
 class TicketBase(BaseModel):
     contrat_id: UUID
-    type: Literal["maintenance", "conflit", "difficulte_paiement"]
+    type_ticket: TypeTicket
     description: str
 
 

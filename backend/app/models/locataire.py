@@ -22,8 +22,3 @@ class Locataire(Base):
 
     contrats: Mapped[list["Contrat"]] = relationship(back_populates="locataire")
     depots: Mapped[list["DepotWallet"]] = relationship(back_populates="locataire")
-    notifications: Mapped[list["Notification"]] = relationship(
-        back_populates="locataire",
-        primaryjoin="and_(Notification.destinataire_id == Locataire.id, Notification.type_destinataire == 'locataire')",
-        foreign_keys="Notification.destinataire_id",
-    )

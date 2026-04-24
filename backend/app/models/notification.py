@@ -21,11 +21,3 @@ class Notification(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     contrat: Mapped["Contrat | None"] = relationship(back_populates="notifications")
-
-    # Relations polymorphiques résolues via type_destinataire au niveau service
-    locataire: Mapped["Locataire | None"] = relationship(
-        "Locataire",
-        primaryjoin="and_(foreign(Notification.destinataire_id) == Locataire.id, Notification.type_destinataire == 'locataire')",
-        back_populates="notifications",
-        viewonly=True,
-    )

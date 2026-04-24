@@ -12,7 +12,7 @@ class Bien(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     adresse: Mapped[str] = mapped_column(String(500), nullable=False)
-    type: Mapped[str] = mapped_column(String(50), nullable=False)  # appartement/villa/studio/magasin
+    type_bien: Mapped[str] = mapped_column(String(50), nullable=False)  # appartement/villa/studio/magasin
     proprietaire_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("proprietaires.id"), nullable=False)
     agence_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("agences.id"), nullable=True)
     loyer_mensuel: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)

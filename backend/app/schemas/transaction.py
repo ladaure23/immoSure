@@ -22,6 +22,13 @@ class TransactionRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class TopBienStats(BaseModel):
+    bien_id: UUID
+    adresse: str
+    montant_total: Decimal
+    nombre_transactions: int
+
+
 class DashboardStats(BaseModel):
     total_transactions: int
     montant_total_mois: Decimal
@@ -29,4 +36,4 @@ class DashboardStats(BaseModel):
     taux_recouvrement: Decimal  # % contrats payés ce mois
     transactions_en_attente: int
     transactions_echouees: int
-    top_biens: list[dict]
+    top_biens: list[TopBienStats]

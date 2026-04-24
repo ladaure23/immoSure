@@ -5,31 +5,25 @@ from pydantic import BaseModel, field_validator
 from typing import Literal
 
 
-class DepotInitierFedapay(BaseModel):
+class _DepotInitierBase(BaseModel):
     locataire_id: UUID
     montant: Decimal
     telephone: str
+
+    @field_validator("montant")
+    @classmethod
+    def montant_minimum(cls, v: Decimal) -> Decimal:
+        if v < Decimal("500"):
+            raise ValueError("Le montant minimum est de 500 FCFA")
+        return v
+
+
+class DepotInitierFedapay(_DepotInitierBase):
     operateur: Literal["MTN", "MOOV"]
 
-    @field_validator("montant")
-    @classmethod
-    def montant_minimum(cls, v: Decimal) -> Decimal:
-        if v < Decimal("500"):
-            raise ValueError("Le montant minimum est de 500 FCFA")
-        return v
 
-
-class DepotInitierKkiapay(BaseModel):
-    locataire_id: UUID
-    montant: Decimal
-    telephone: str
-
-    @field_validator("montant")
-    @classmethod
-    def montant_minimum(cls, v: Decimal) -> Decimal:
-        if v < Decimal("500"):
-            raise ValueError("Le montant minimum est de 500 FCFA")
-        return v
+class DepotInitierKkiapay(_DepotInitierBase):
+    pass
 
 
 class DepotWalletRead(BaseModel):
