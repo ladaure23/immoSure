@@ -19,12 +19,28 @@ from app.modules.biens.router import router as biens_router
 from app.modules.contrats.router import router as contrats_router
 from app.modules.payments.router import router as payments_router
 from app.modules.tickets.router import router as tickets_router
+from app.modules.telegram.bot import build_application as build_telegram_app
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(f"Starting ImmoSure [{settings.environment}]")
+
+    telegram_app = None
+    if settings.telegram_bot_token:
+        telegram_app = build_telegram_app()
+        await telegram_app.initialize()
+        await telegram_app.start()
+        await telegram_app.updater.start_polling()
+        logger.info("Telegram bot démarré (polling)")
+
     yield
+
+    if telegram_app:
+        await telegram_app.updater.stop()
+        await telegram_app.stop()
+        await telegram_app.shutdown()
+
     await engine.dispose()
     logger.info("ImmoSure shutdown complete")
 
