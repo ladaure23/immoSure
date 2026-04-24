@@ -7,6 +7,8 @@ from fastapi import HTTPException, status
 from app.models.transaction import Transaction
 from app.models.depot_wallet import DepotWallet
 from app.models.locataire import Locataire
+from app.models.contrat import Contrat
+from app.models.bien import Bien
 from app.schemas.transaction import TransactionRead, DashboardStats, TopBienStats
 from app.schemas.depot_wallet import DepotInitierFedapay, DepotInitierKkiapay, DepotResponse
 
@@ -44,18 +46,19 @@ async def get_dashboard_stats(db: AsyncSession) -> DashboardStats:
     )
     montant_annee = annee_result.scalar() or Decimal("0")
 
-    from app.models.contrat import Contrat
     actifs_result = await db.execute(
         select(func.count(Contrat.id)).where(Contrat.statut == "actif")
     )
     total_actifs = actifs_result.scalar() or 1
 
+    # fix: func.distinct() — Transaction.id.distinct() n'existe pas en SQLAlchemy 2.0
     payes_result = await db.execute(
-        select(func.count(Transaction.id.distinct()))
+        select(func.count(func.distinct(Transaction.id)))
         .where(Transaction.mois_concerne >= debut_mois, Transaction.statut == "complete")
     )
     payes = payes_result.scalar() or 0
-    taux_recouvrement = Decimal(str(round((payes / total_actifs) * 100, 2)))
+    # fix: cap à 100% — possible si plusieurs transactions pour un même contrat
+    taux_recouvrement = Decimal(str(min(100, round((payes / total_actifs) * 100, 2))))
 
     attente_result = await db.execute(
         select(func.count(Transaction.id)).where(Transaction.statut == "en_attente")
@@ -67,7 +70,7 @@ async def get_dashboard_stats(db: AsyncSession) -> DashboardStats:
     )
     echoues = echec_result.scalar() or 0
 
-    from app.models.bien import Bien
+    # fix: double JOIN explicite — .in_(subquery) comme condition de join donnait de faux résultats
     top_result = await db.execute(
         select(
             Bien.id,
@@ -75,9 +78,8 @@ async def get_dashboard_stats(db: AsyncSession) -> DashboardStats:
             func.sum(Transaction.montant_total).label("montant_total"),
             func.count(Transaction.id).label("nombre_transactions"),
         )
-        .join(Transaction, Transaction.contrat_id.in_(
-            select(Contrat.id).where(Contrat.bien_id == Bien.id)
-        ))
+        .join(Contrat, Transaction.contrat_id == Contrat.id)
+        .join(Bien, Contrat.bien_id == Bien.id)
         .where(Transaction.statut == "complete")
         .group_by(Bien.id, Bien.adresse)
         .order_by(func.sum(Transaction.montant_total).desc())
@@ -150,7 +152,8 @@ async def handle_webhook_fedapay(body: dict, db: AsyncSession) -> dict:
         select(DepotWallet).where(DepotWallet.reference_provider == str(reference))
     )
     depot = result.scalar_one_or_none()
-    if depot and body.get("transaction", {}).get("status") == "approved":
+    # fix: vérifier statut == "en_attente" pour idempotence (providers rejouent les webhooks)
+    if depot and depot.statut == "en_attente" and body.get("transaction", {}).get("status") == "approved":
         depot.statut = "complete"
         locataire_result = await db.execute(
             select(Locataire).where(Locataire.id == depot.locataire_id)
@@ -171,7 +174,8 @@ async def handle_webhook_kkiapay(body: dict, signature: str | None, db: AsyncSes
         select(DepotWallet).where(DepotWallet.reference_provider == str(reference))
     )
     depot = result.scalar_one_or_none()
-    if depot and body.get("status") == "SUCCESS":
+    # fix: vérifier statut == "en_attente" pour idempotence
+    if depot and depot.statut == "en_attente" and body.get("status") == "SUCCESS":
         depot.statut = "complete"
         locataire_result = await db.execute(
             select(Locataire).where(Locataire.id == depot.locataire_id)

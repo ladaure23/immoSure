@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.middleware.auth import get_current_user
 from app.schemas.transaction import TransactionRead, DashboardStats
-from app.schemas.depot_wallet import DepotInitierFedapay, DepotInitierKkiapay, DepotResponse, DepotWalletRead
+from app.schemas.depot_wallet import DepotInitierFedapay, DepotInitierKkiapay, DepotResponse
 from app.modules.payments import service
 
 router = APIRouter(tags=["payments"])

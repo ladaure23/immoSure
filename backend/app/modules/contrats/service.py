@@ -1,8 +1,8 @@
 import uuid
+from calendar import monthrange
 from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from sqlalchemy.orm import joinedload
 from fastapi import HTTPException, status
 from app.models.contrat import Contrat
 from app.models.bien import Bien
@@ -24,11 +24,13 @@ async def get_contrat(contrat_id: uuid.UUID, db: AsyncSession) -> Contrat:
 
 
 async def create_contrat(payload: ContratCreate, db: AsyncSession) -> Contrat:
-    contrat = Contrat(**payload.model_dump())
-    db.add(contrat)
-    # Marquer le bien comme loué
     bien_result = await db.execute(select(Bien).where(Bien.id == payload.bien_id))
     bien = bien_result.scalar_one_or_none()
+    # fix: empêcher deux contrats actifs sur le même bien
+    if bien and bien.statut != "disponible":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ce bien est déjà loué")
+    contrat = Contrat(**payload.model_dump())
+    db.add(contrat)
     if bien:
         bien.statut = "loue"
     await db.commit()
@@ -41,7 +43,6 @@ async def update_contrat(contrat_id: uuid.UUID, payload: ContratUpdate, db: Asyn
     updates = payload.model_dump(exclude_unset=True)
     for field, value in updates.items():
         setattr(contrat, field, value)
-    # Si le contrat est résilié/expiré, remettre le bien disponible
     if updates.get("statut") in ("resilie", "expire"):
         bien_result = await db.execute(select(Bien).where(Bien.id == contrat.bien_id))
         bien = bien_result.scalar_one_or_none()
@@ -64,18 +65,21 @@ async def get_contrats_a_risque(db: AsyncSession) -> list[ContratRisque]:
 
     risques = []
     for contrat, locataire, bien in rows:
-        echeance = today.replace(day=contrat.jour_echeance)
+        # fix: clamp au dernier jour du mois pour éviter ValueError en février
+        max_day = monthrange(today.year, today.month)[1]
+        echeance = today.replace(day=min(contrat.jour_echeance, max_day))
         jours = (echeance - today).days
         if jours < 0:
-            # Échéance ce mois dépassée, calculer pour le mois prochain
             if today.month == 12:
-                echeance = echeance.replace(year=today.year + 1, month=1)
+                next_year, next_month = today.year + 1, 1
             else:
-                echeance = echeance.replace(month=today.month + 1)
+                next_year, next_month = today.year, today.month + 1
+            max_day_next = monthrange(next_year, next_month)[1]
+            echeance = echeance.replace(year=next_year, month=next_month, day=min(contrat.jour_echeance, max_day_next))
             jours = (echeance - today).days
 
         if locataire.wallet_solde >= contrat.loyer_montant:
-            continue  # Provisionnement complet, pas à risque
+            continue
 
         taux = min(100, int((locataire.wallet_solde / contrat.loyer_montant) * 100)) if contrat.loyer_montant > 0 else 0
 
