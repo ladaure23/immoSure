@@ -11,9 +11,9 @@ Le split est calculé par soustraction successive (ROUND_DOWN sur les 3 premièr
 remainder pour la 4e) pour garantir que la somme == montant_total sans arrondi parasite.
 """
 import uuid
-from calendar import monthrange
 from datetime import date
 from decimal import Decimal, ROUND_DOWN
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from fastapi import HTTPException, status
@@ -34,9 +34,10 @@ def calculer_split(montant: Decimal, has_agence: bool = True) -> dict[str, Decim
     """Retourne les 4 parts de répartition dont la somme == montant."""
     part_plateforme = (montant * _TAUX_PLATEFORME / _CENT).quantize(_CENTIME, rounding=ROUND_DOWN)
     part_agence = (montant * _TAUX_AGENCE / _CENT).quantize(_CENTIME, rounding=ROUND_DOWN) if has_agence else Decimal("0")
-    part_proprietaire_base = (montant * _TAUX_PROPRIETAIRE / _CENT).quantize(_CENTIME, rounding=ROUND_DOWN)
-    # Sans agence, les 8 % reviennent au propriétaire
-    part_proprietaire = part_proprietaire_base if has_agence else part_proprietaire_base + (montant * _TAUX_AGENCE / _CENT).quantize(_CENTIME, rounding=ROUND_DOWN)
+    # fix: sans agence, une seule opération sur 97 % pour éviter un double arrondi
+    # (deux ROUND_DOWN indépendants peuvent différer d'1 centime d'un arrondi unique)
+    taux_proprio = _TAUX_PROPRIETAIRE if has_agence else _TAUX_PROPRIETAIRE + _TAUX_AGENCE
+    part_proprietaire = (montant * taux_proprio / _CENT).quantize(_CENTIME, rounding=ROUND_DOWN)
     # Maintenance = remainder pour garantir total == montant
     part_maintenance = montant - part_proprietaire - part_agence - part_plateforme
     return {
@@ -130,7 +131,7 @@ async def executer_paiements_du_jour(db: AsyncSession) -> BatchPaiementResultat:
     Appelé par l'APScheduler (étape 6) — peut aussi être déclenché manuellement.
     """
     today = date.today()
-    mois = _mois_en_cours()
+    mois = today.replace(day=1)
 
     result = await db.execute(
         select(Contrat).where(
@@ -143,7 +144,16 @@ async def executer_paiements_du_jour(db: AsyncSession) -> BatchPaiementResultat:
     reussis = echoues = ignores = 0
 
     for contrat in contrats:
-        res = await executer_paiement_contrat(contrat.id, db, mois_concerne=mois)
+        # fix: isolation par paiement — une erreur DB sur un contrat ne bloque pas les suivants
+        try:
+            res = await executer_paiement_contrat(contrat.id, db, mois_concerne=mois)
+        except Exception:
+            logger.exception("Erreur lors du paiement contrat {id}", id=contrat.id)
+            res = PaiementResultat(contrat_id=contrat.id, statut="echoue", raison="Erreur interne")
+            echoues += 1
+            details.append(res)
+            continue
+
         details.append(res)
         if res.statut == "complete":
             reussis += 1
