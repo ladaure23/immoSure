@@ -15,11 +15,12 @@ async def list_locataires(db: AsyncSession, user: User) -> list[Locataire]:
     if user.role == "admin":
         result = await db.execute(select(Locataire).order_by(Locataire.created_at.desc()))
         return list(result.scalars().all())
+    # LEFT JOIN : locataires liés à cette agence OU sans contrat (nouvellement créés)
     result = await db.execute(
         select(Locataire)
-        .join(Contrat, Contrat.locataire_id == Locataire.id)
-        .join(Bien, Contrat.bien_id == Bien.id)
-        .where(Bien.agence_id == user.agence_id)
+        .outerjoin(Contrat, Contrat.locataire_id == Locataire.id)
+        .outerjoin(Bien, Contrat.bien_id == Bien.id)
+        .where((Bien.agence_id == user.agence_id) | (Contrat.id == None))
         .distinct()
         .order_by(Locataire.created_at.desc())
     )
@@ -63,14 +64,14 @@ async def update_locataire(locataire_id: uuid.UUID, payload: LocataireUpdate, db
 async def get_wallet(locataire_id: uuid.UUID, db: AsyncSession, user: User) -> WalletInfo:
     loc = await get_locataire(locataire_id, db, user)
 
-    contrat_result = await db.execute(
+    q = (
         select(Contrat)
         .join(Bien, Contrat.bien_id == Bien.id)
         .where(Contrat.locataire_id == locataire_id, Contrat.statut == "actif")
-        .where(Bien.agence_id == user.agence_id if user.role != "admin" else True)
-        .order_by(Contrat.created_at.desc())
-        .limit(1)
     )
+    if user.role != "admin":
+        q = q.where(Bien.agence_id == user.agence_id)
+    contrat_result = await db.execute(q.order_by(Contrat.created_at.desc()).limit(1))
     contrat = contrat_result.scalar_one_or_none()
     loyer = contrat.loyer_montant if contrat else None
 

@@ -1,4 +1,5 @@
 import axios from "axios";
+import { useAuthStore } from "../store/authStore";
 
 const http = axios.create({ baseURL: "/api" });
 
@@ -12,6 +13,17 @@ http.interceptors.request.use((config) => {
   } catch {}
   return config;
 });
+
+http.interceptors.response.use(
+  (r) => r,
+  (err) => {
+    if (err.response?.status === 401) {
+      useAuthStore.getState().logout();
+      window.location.href = "/";
+    }
+    return Promise.reject(err);
+  }
+);
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export type TypeBien = "appartement" | "villa" | "studio" | "magasin";
