@@ -7,39 +7,50 @@ from fastapi import HTTPException, status
 from app.models.contrat import Contrat
 from app.models.bien import Bien
 from app.models.locataire import Locataire
+from app.models.user import User
 from app.schemas.contrat import ContratCreate, ContratUpdate, ContratRisque
 
 
-async def list_contrats(db: AsyncSession) -> list[Contrat]:
-    result = await db.execute(select(Contrat).order_by(Contrat.created_at.desc()))
+async def list_contrats(db: AsyncSession, user: User) -> list[Contrat]:
+    q = select(Contrat).join(Bien, Contrat.bien_id == Bien.id).order_by(Contrat.created_at.desc())
+    if user.role != "admin":
+        q = q.where(Bien.agence_id == user.agence_id)
+    result = await db.execute(q)
     return list(result.scalars().all())
 
 
-async def get_contrat(contrat_id: uuid.UUID, db: AsyncSession) -> Contrat:
+async def get_contrat(contrat_id: uuid.UUID, db: AsyncSession, user: User) -> Contrat:
     result = await db.execute(select(Contrat).where(Contrat.id == contrat_id))
     contrat = result.scalar_one_or_none()
     if not contrat:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contrat introuvable")
+    if user.role != "admin":
+        bien_result = await db.execute(select(Bien).where(Bien.id == contrat.bien_id))
+        bien = bien_result.scalar_one_or_none()
+        if not bien or bien.agence_id != user.agence_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé")
     return contrat
 
 
-async def create_contrat(payload: ContratCreate, db: AsyncSession) -> Contrat:
+async def create_contrat(payload: ContratCreate, db: AsyncSession, user: User) -> Contrat:
     bien_result = await db.execute(select(Bien).where(Bien.id == payload.bien_id))
     bien = bien_result.scalar_one_or_none()
-    # fix: empêcher deux contrats actifs sur le même bien
-    if bien and bien.statut != "disponible":
+    if not bien:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bien introuvable")
+    if user.role != "admin" and bien.agence_id != user.agence_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Ce bien n'appartient pas à votre agence")
+    if bien.statut != "disponible":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ce bien est déjà loué")
     contrat = Contrat(**payload.model_dump())
     db.add(contrat)
-    if bien:
-        bien.statut = "loue"
+    bien.statut = "loue"
     await db.commit()
     await db.refresh(contrat)
     return contrat
 
 
-async def update_contrat(contrat_id: uuid.UUID, payload: ContratUpdate, db: AsyncSession) -> Contrat:
-    contrat = await get_contrat(contrat_id, db)
+async def update_contrat(contrat_id: uuid.UUID, payload: ContratUpdate, db: AsyncSession, user: User) -> Contrat:
+    contrat = await get_contrat(contrat_id, db, user)
     updates = payload.model_dump(exclude_unset=True)
     for field, value in updates.items():
         setattr(contrat, field, value)
@@ -53,19 +64,21 @@ async def update_contrat(contrat_id: uuid.UUID, payload: ContratUpdate, db: Asyn
     return contrat
 
 
-async def get_contrats_a_risque(db: AsyncSession) -> list[ContratRisque]:
+async def get_contrats_a_risque(db: AsyncSession, user: User) -> list[ContratRisque]:
     today = date.today()
-    result = await db.execute(
+    q = (
         select(Contrat, Locataire, Bien)
         .join(Locataire, Contrat.locataire_id == Locataire.id)
         .join(Bien, Contrat.bien_id == Bien.id)
         .where(Contrat.statut == "actif")
     )
+    if user.role != "admin":
+        q = q.where(Bien.agence_id == user.agence_id)
+    result = await db.execute(q)
     rows = result.all()
 
     risques = []
     for contrat, locataire, bien in rows:
-        # fix: clamp au dernier jour du mois pour éviter ValueError en février
         max_day = monthrange(today.year, today.month)[1]
         echeance = today.replace(day=min(contrat.jour_echeance, max_day))
         jours = (echeance - today).days

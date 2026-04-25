@@ -5,24 +5,45 @@ from sqlalchemy import select
 from fastapi import HTTPException, status
 from app.models.locataire import Locataire
 from app.models.contrat import Contrat
+from app.models.bien import Bien
 from app.models.depot_wallet import DepotWallet
+from app.models.user import User
 from app.schemas.locataire import LocataireCreate, LocataireUpdate, WalletInfo
 
 
-async def list_locataires(db: AsyncSession) -> list[Locataire]:
-    result = await db.execute(select(Locataire).order_by(Locataire.created_at.desc()))
+async def list_locataires(db: AsyncSession, user: User) -> list[Locataire]:
+    if user.role == "admin":
+        result = await db.execute(select(Locataire).order_by(Locataire.created_at.desc()))
+        return list(result.scalars().all())
+    result = await db.execute(
+        select(Locataire)
+        .join(Contrat, Contrat.locataire_id == Locataire.id)
+        .join(Bien, Contrat.bien_id == Bien.id)
+        .where(Bien.agence_id == user.agence_id)
+        .distinct()
+        .order_by(Locataire.created_at.desc())
+    )
     return list(result.scalars().all())
 
 
-async def get_locataire(locataire_id: uuid.UUID, db: AsyncSession) -> Locataire:
+async def get_locataire(locataire_id: uuid.UUID, db: AsyncSession, user: User) -> Locataire:
     result = await db.execute(select(Locataire).where(Locataire.id == locataire_id))
     loc = result.scalar_one_or_none()
     if not loc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Locataire introuvable")
+    if user.role != "admin":
+        access = await db.execute(
+            select(Contrat)
+            .join(Bien, Contrat.bien_id == Bien.id)
+            .where(Contrat.locataire_id == locataire_id, Bien.agence_id == user.agence_id)
+            .limit(1)
+        )
+        if not access.scalar_one_or_none():
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé")
     return loc
 
 
-async def create_locataire(payload: LocataireCreate, db: AsyncSession) -> Locataire:
+async def create_locataire(payload: LocataireCreate, db: AsyncSession, user: User) -> Locataire:
     loc = Locataire(**payload.model_dump())
     db.add(loc)
     await db.commit()
@@ -30,8 +51,8 @@ async def create_locataire(payload: LocataireCreate, db: AsyncSession) -> Locata
     return loc
 
 
-async def update_locataire(locataire_id: uuid.UUID, payload: LocataireUpdate, db: AsyncSession) -> Locataire:
-    loc = await get_locataire(locataire_id, db)
+async def update_locataire(locataire_id: uuid.UUID, payload: LocataireUpdate, db: AsyncSession, user: User) -> Locataire:
+    loc = await get_locataire(locataire_id, db, user)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(loc, field, value)
     await db.commit()
@@ -39,12 +60,14 @@ async def update_locataire(locataire_id: uuid.UUID, payload: LocataireUpdate, db
     return loc
 
 
-async def get_wallet(locataire_id: uuid.UUID, db: AsyncSession) -> WalletInfo:
-    loc = await get_locataire(locataire_id, db)
+async def get_wallet(locataire_id: uuid.UUID, db: AsyncSession, user: User) -> WalletInfo:
+    loc = await get_locataire(locataire_id, db, user)
 
     contrat_result = await db.execute(
         select(Contrat)
+        .join(Bien, Contrat.bien_id == Bien.id)
         .where(Contrat.locataire_id == locataire_id, Contrat.statut == "actif")
+        .where(Bien.agence_id == user.agence_id if user.role != "admin" else True)
         .order_by(Contrat.created_at.desc())
         .limit(1)
     )
