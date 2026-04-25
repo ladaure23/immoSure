@@ -30,8 +30,10 @@ export default function BiensPage() {
     proprietaire_id: "", loyer_mensuel: "",
   });
 
-  const { data: biens = [], isLoading } = useQuery({ queryKey: ["biens"], queryFn: getBiens });
-  const { data: proprietaires = [] } = useQuery({ queryKey: ["proprietaires"], queryFn: getProprietaires });
+  const { data: rawBiens, isLoading } = useQuery({ queryKey: ["biens"], queryFn: getBiens });
+  const { data: rawProprietaires } = useQuery({ queryKey: ["proprietaires"], queryFn: getProprietaires });
+  const biens = Array.isArray(rawBiens) ? rawBiens : [];
+  const proprietaires = Array.isArray(rawProprietaires) ? rawProprietaires : [];
 
   const mutation = useMutation({
     mutationFn: createBien,

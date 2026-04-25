@@ -28,10 +28,14 @@ export default function TicketsPage() {
     contrat_id: "", type_ticket: "maintenance" as TypeTicket, description: "",
   });
 
-  const { data: tickets = [], isLoading } = useQuery({ queryKey: ["tickets"], queryFn: getTickets });
-  const { data: contrats = [] } = useQuery({ queryKey: ["contrats"], queryFn: getContrats });
-  const { data: biens = [] } = useQuery({ queryKey: ["biens"], queryFn: getBiens });
-  const { data: locataires = [] } = useQuery({ queryKey: ["locataires"], queryFn: getLocataires });
+  const { data: rawTickets, isLoading } = useQuery({ queryKey: ["tickets"], queryFn: getTickets });
+  const { data: rawContrats } = useQuery({ queryKey: ["contrats"], queryFn: getContrats });
+  const { data: rawBiens } = useQuery({ queryKey: ["biens"], queryFn: getBiens });
+  const { data: rawLocataires } = useQuery({ queryKey: ["locataires"], queryFn: getLocataires });
+  const tickets = Array.isArray(rawTickets) ? rawTickets : [];
+  const contrats = Array.isArray(rawContrats) ? rawContrats : [];
+  const biens = Array.isArray(rawBiens) ? rawBiens : [];
+  const locataires = Array.isArray(rawLocataires) ? rawLocataires : [];
 
   const bienMap = Object.fromEntries(biens.map((b) => [b.id, b]));
   const locMap = Object.fromEntries(locataires.map((l) => [l.id, l]));

@@ -31,9 +31,12 @@ export default function ContratsPage() {
     date_debut: "", jour_echeance: "1",
   });
 
-  const { data: contrats = [], isLoading } = useQuery({ queryKey: ["contrats"], queryFn: getContrats });
-  const { data: biens = [] } = useQuery({ queryKey: ["biens"], queryFn: getBiens });
-  const { data: locataires = [] } = useQuery({ queryKey: ["locataires"], queryFn: getLocataires });
+  const { data: rawContrats, isLoading } = useQuery({ queryKey: ["contrats"], queryFn: getContrats });
+  const { data: rawBiens } = useQuery({ queryKey: ["biens"], queryFn: getBiens });
+  const { data: rawLocataires } = useQuery({ queryKey: ["locataires"], queryFn: getLocataires });
+  const contrats = Array.isArray(rawContrats) ? rawContrats : [];
+  const biens = Array.isArray(rawBiens) ? rawBiens : [];
+  const locataires = Array.isArray(rawLocataires) ? rawLocataires : [];
 
   const bienMap = Object.fromEntries(biens.map((b) => [b.id, b]));
   const locMap = Object.fromEntries(locataires.map((l) => [l.id, l]));

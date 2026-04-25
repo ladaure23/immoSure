@@ -66,10 +66,15 @@ const fmt = (n: number) =>
   new Intl.NumberFormat("fr-FR").format(n) + " FCFA";
 
 export default function DashboardHome() {
-  const { data: biens = [] } = useQuery({ queryKey: ["biens"], queryFn: getBiens });
-  const { data: contrats = [] } = useQuery({ queryKey: ["contrats"], queryFn: getContrats });
-  const { data: locataires = [] } = useQuery({ queryKey: ["locataires"], queryFn: getLocataires });
-  const { data: risques = [] } = useQuery({ queryKey: ["risques"], queryFn: getContratsRisques });
+  const { data: rawBiens } = useQuery({ queryKey: ["biens"], queryFn: getBiens });
+  const { data: rawContrats } = useQuery({ queryKey: ["contrats"], queryFn: getContrats });
+  const { data: rawLocataires } = useQuery({ queryKey: ["locataires"], queryFn: getLocataires });
+  const { data: rawRisques } = useQuery({ queryKey: ["risques"], queryFn: getContratsRisques });
+
+  const biens = Array.isArray(rawBiens) ? rawBiens : [];
+  const contrats = Array.isArray(rawContrats) ? rawContrats : [];
+  const locataires = Array.isArray(rawLocataires) ? rawLocataires : [];
+  const risques = Array.isArray(rawRisques) ? rawRisques : [];
 
   const contratsActifs = contrats.filter((c) => c.statut === "actif").length;
   const biensLoues = biens.filter((b) => b.statut === "loue").length;

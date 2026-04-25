@@ -25,8 +25,10 @@ export default function LocatairesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState({ nom: "", prenom: "", telephone: "" });
 
-  const { data: locataires = [], isLoading } = useQuery({ queryKey: ["locataires"], queryFn: getLocataires });
-  const { data: contrats = [] } = useQuery({ queryKey: ["contrats"], queryFn: getContrats });
+  const { data: rawLocataires, isLoading } = useQuery({ queryKey: ["locataires"], queryFn: getLocataires });
+  const { data: rawContrats } = useQuery({ queryKey: ["contrats"], queryFn: getContrats });
+  const locataires = Array.isArray(rawLocataires) ? rawLocataires : [];
+  const contrats = Array.isArray(rawContrats) ? rawContrats : [];
 
   const mutation = useMutation({
     mutationFn: createLocataire,
