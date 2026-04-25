@@ -3,26 +3,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from fastapi import HTTPException, status
 from jose import jwt
-from passlib.context import CryptContext
+import bcrypt
 from app.config import settings
 from app.models.user import User
 from app.schemas.auth import RegisterRequest, TokenResponse
 
-_pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 def _hash(password: str) -> str:
-    return _pwd.hash(password)
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 def _verify(plain: str, hashed: str) -> bool:
-    return _pwd.verify(plain, hashed)
+    return bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
 def _create_token(user: User) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
     return jwt.encode(
-        {"sub": str(user.id), "role": user.role, "exp": expire},
+        {"sub": str(user.id), "role": user.role, "agence_id": str(user.agence_id) if user.agence_id else None, "exp": expire},
         settings.secret_key,
         algorithm="HS256",
     )

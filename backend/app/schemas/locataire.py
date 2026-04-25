@@ -3,10 +3,7 @@ from uuid import UUID
 from decimal import Decimal
 from datetime import datetime
 from pydantic import BaseModel, field_validator
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from app.schemas.depot_wallet import DepotWalletRead
+from app.schemas.depot_wallet import DepotWalletRead
 
 
 class LocataireBase(BaseModel):
