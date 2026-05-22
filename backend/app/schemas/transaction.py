@@ -9,11 +9,13 @@ class TransactionRead(BaseModel):
     id: UUID
     contrat_id: UUID
     montant_total: Decimal
+    montant_net: Decimal | None
+    frais_fedapay: Decimal | None
     part_proprietaire: Decimal
     part_agence: Decimal
     part_plateforme: Decimal
-    part_maintenance: Decimal
     statut: Literal["en_attente", "complete", "echoue"]
+    fedapay_transaction_id: str | None
     reference_paiement: str | None
     provider: str | None
     mois_concerne: date
@@ -33,22 +35,7 @@ class DashboardStats(BaseModel):
     total_transactions: int
     montant_total_mois: Decimal
     montant_total_annee: Decimal
-    taux_recouvrement: Decimal  # % contrats payés ce mois
+    taux_recouvrement: Decimal
     transactions_en_attente: int
     transactions_echouees: int
     top_biens: list[TopBienStats]
-
-
-class PaiementResultat(BaseModel):
-    contrat_id: UUID
-    statut: Literal["complete", "echoue", "ignore"]
-    montant: Decimal | None = None
-    raison: str | None = None
-
-
-class BatchPaiementResultat(BaseModel):
-    traites: int
-    reussis: int
-    echoues: int
-    ignores: int
-    details: list[PaiementResultat]

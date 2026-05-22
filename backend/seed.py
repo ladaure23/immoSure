@@ -1,6 +1,6 @@
 """
 Seed script — crée une agence, un compte utilisateur, des propriétaires,
-des biens, des locataires et des contrats de test.
+des biens, des locations, des locataires et des contrats de test.
 Usage: python seed.py
 """
 import asyncio
@@ -22,7 +22,7 @@ def _hash_pw(password: str) -> str:
 
 
 async def seed():
-    from app.models import Agence, Proprietaire, Locataire, Bien, Contrat, User, Ticket
+    from app.models import Agence, Proprietaire, Locataire, Bien, Location, Contrat, User, Ticket
     from app.database import Base
 
     async with AsyncSessionLocal() as db:
@@ -56,6 +56,7 @@ async def seed():
             nom="Adjovi",
             prenom="Barnabé",
             telephone="+229 96 00 11 22",
+            email="barnabe.adjovi@gmail.com",
             compte_mobile_money="22996001122",
             operateur_mobile="MTN",
             localisation="Cotonou, Cadjehoun",
@@ -66,6 +67,7 @@ async def seed():
             nom="Dossou",
             prenom="Euphrasie",
             telephone="+229 97 33 44 55",
+            email="euphrasie.dossou@gmail.com",
             compte_mobile_money="22997334455",
             operateur_mobile="MOOV",
             localisation="Cotonou, Fidjrossè",
@@ -76,6 +78,7 @@ async def seed():
             nom="Hounsa",
             prenom="Gildas",
             telephone="+229 95 66 77 88",
+            email="gildas.hounsa@gmail.com",
             compte_mobile_money="22995667788",
             operateur_mobile="WAVE",
             localisation="Porto-Novo, Stade",
@@ -91,8 +94,6 @@ async def seed():
             type_bien="appartement",
             proprietaire_id=proprio1.id,
             agence_id=agence.id,
-            loyer_mensuel=Decimal("120000"),
-            statut="loue",
         )
         bien2 = Bien(
             id=uuid.uuid4(),
@@ -100,106 +101,158 @@ async def seed():
             type_bien="villa",
             proprietaire_id=proprio1.id,
             agence_id=agence.id,
-            loyer_mensuel=Decimal("250000"),
-            statut="loue",
         )
         bien3 = Bien(
             id=uuid.uuid4(),
-            adresse="Studio B4 Immeuble Soleil, Haie Vive, Cotonou",
-            type_bien="studio",
+            adresse="Immeuble Soleil, Haie Vive, Cotonou",
+            type_bien="immeuble",
             proprietaire_id=proprio2.id,
             agence_id=agence.id,
-            loyer_mensuel=Decimal("75000"),
-            statut="loue",
         )
         bien4 = Bien(
             id=uuid.uuid4(),
-            adresse="Magasin 3 Marché Dantokpa, Zone Commerciale",
+            adresse="Marché Dantokpa, Zone Commerciale, Cotonou",
             type_bien="magasin",
             proprietaire_id=proprio2.id,
             agence_id=agence.id,
-            loyer_mensuel=Decimal("180000"),
-            statut="loue",
         )
         bien5 = Bien(
             id=uuid.uuid4(),
-            adresse="Appartement 2A Résidence du Lac, Porto-Novo",
+            adresse="Résidence du Lac, Porto-Novo",
             type_bien="appartement",
             proprietaire_id=proprio3.id,
             agence_id=agence.id,
-            loyer_mensuel=Decimal("95000"),
-            statut="disponible",
         )
         db.add_all([bien1, bien2, bien3, bien4, bien5])
         await db.flush()
 
+        # ── Locations ────────────────────────────────────────────────────────
+        loc_b1 = Location(
+            id=uuid.uuid4(),
+            bien_id=bien1.id,
+            nom="Appartement Principal",
+            type_location="appartement",
+            surface_m2=Decimal("65"),
+            loyer_mensuel=Decimal("120000"),
+            statut="loue",
+        )
+        loc_b2 = Location(
+            id=uuid.uuid4(),
+            bien_id=bien2.id,
+            nom="Villa entière",
+            type_location="villa",
+            surface_m2=Decimal("180"),
+            loyer_mensuel=Decimal("250000"),
+            statut="loue",
+        )
+        # Immeuble avec 2 studios
+        loc_b3a = Location(
+            id=uuid.uuid4(),
+            bien_id=bien3.id,
+            nom="Studio B4",
+            type_location="studio",
+            surface_m2=Decimal("28"),
+            loyer_mensuel=Decimal("75000"),
+            statut="loue",
+        )
+        loc_b3b = Location(
+            id=uuid.uuid4(),
+            bien_id=bien3.id,
+            nom="Studio B5",
+            type_location="studio",
+            surface_m2=Decimal("28"),
+            loyer_mensuel=Decimal("75000"),
+            statut="disponible",
+        )
+        loc_b4 = Location(
+            id=uuid.uuid4(),
+            bien_id=bien4.id,
+            nom="Magasin 3",
+            type_location="magasin",
+            surface_m2=Decimal("40"),
+            loyer_mensuel=Decimal("180000"),
+            statut="loue",
+        )
+        loc_b5 = Location(
+            id=uuid.uuid4(),
+            bien_id=bien5.id,
+            nom="Appartement 2A",
+            type_location="appartement",
+            surface_m2=Decimal("55"),
+            loyer_mensuel=Decimal("95000"),
+            statut="disponible",
+        )
+        db.add_all([loc_b1, loc_b2, loc_b3a, loc_b3b, loc_b4, loc_b5])
+        await db.flush()
+
         # ── Locataires ───────────────────────────────────────────────────────
-        loc1 = Locataire(
+        locataire1 = Locataire(
             id=uuid.uuid4(),
             nom="Mensah",
             prenom="Kofi",
             telephone="+229 97 10 20 30",
-            wallet_solde=Decimal("120000"),  # wallet plein → vert
             score_fiabilite=92,
         )
-        loc2 = Locataire(
+        locataire2 = Locataire(
             id=uuid.uuid4(),
             nom="Amoussou",
             prenom="Félicité",
             telephone="+229 96 40 50 60",
-            wallet_solde=Decimal("175000"),  # wallet plein → vert
             score_fiabilite=85,
         )
-        loc3 = Locataire(
+        locataire3 = Locataire(
             id=uuid.uuid4(),
             nom="Gbaguidi",
             prenom="Romuald",
             telephone="+229 95 70 80 90",
-            wallet_solde=Decimal("40000"),   # wallet partiel → orange (53%)
             score_fiabilite=61,
         )
-        loc4 = Locataire(
+        locataire4 = Locataire(
             id=uuid.uuid4(),
             nom="Ahlonsou",
             prenom="Diane",
             telephone="+229 97 01 23 45",
-            wallet_solde=Decimal("15000"),   # wallet vide → rouge (8%)
             score_fiabilite=38,
         )
-        db.add_all([loc1, loc2, loc3, loc4])
+        db.add_all([locataire1, locataire2, locataire3, locataire4])
         await db.flush()
 
         # ── Contrats ─────────────────────────────────────────────────────────
         contrat1 = Contrat(
-            bien_id=bien1.id,
-            locataire_id=loc1.id,
+            location_id=loc_b1.id,
+            locataire_id=locataire1.id,
             date_debut=date(2025, 1, 1),
             loyer_montant=Decimal("120000"),
             jour_echeance=5,
+            duree_type="indefini",
             statut="actif",
         )
         contrat2 = Contrat(
-            bien_id=bien2.id,
-            locataire_id=loc2.id,
+            location_id=loc_b2.id,
+            locataire_id=locataire2.id,
             date_debut=date(2025, 3, 1),
             loyer_montant=Decimal("250000"),
             jour_echeance=1,
+            duree_type="annuel",
+            date_fin=date(2026, 3, 1),
             statut="actif",
         )
         contrat3 = Contrat(
-            bien_id=bien3.id,
-            locataire_id=loc3.id,
+            location_id=loc_b3a.id,
+            locataire_id=locataire3.id,
             date_debut=date(2025, 6, 1),
             loyer_montant=Decimal("75000"),
             jour_echeance=10,
+            duree_type="indefini",
             statut="actif",
         )
         contrat4 = Contrat(
-            bien_id=bien4.id,
-            locataire_id=loc4.id,
+            location_id=loc_b4.id,
+            locataire_id=locataire4.id,
             date_debut=date(2025, 9, 1),
             loyer_montant=Decimal("180000"),
             jour_echeance=3,
+            duree_type="indefini",
             statut="actif",
         )
         db.add_all([contrat1, contrat2, contrat3, contrat4])
@@ -224,7 +277,8 @@ async def seed():
         print("✅ Seed terminé !")
         print(f"   Agence   : {agence.raison_sociale} ({agence.id})")
         print(f"   Login    : admin@immosure.bj / immo2026!")
-        print(f"   Biens    : 5 (4 loués, 1 disponible)")
+        print(f"   Biens    : 5 (immeuble avec 2 studios)")
+        print(f"   Locations: 6 (4 louées, 2 disponibles)")
         print(f"   Contrats : 4 actifs")
         print(f"   Tickets  : 2")
 

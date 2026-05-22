@@ -1,188 +1,85 @@
 """
-Service de split automatique des paiements.
+Calcul du split FedaPay Marketplace.
 
-Règles de répartition :
-  - Propriétaire : 89 %
-  - Agence       :  8 % (si bien rattaché à une agence, sinon reversé au propriétaire)
-  - Plateforme   :  2 %
-  - Maintenance  :  1 %
+Règles :
+  - Propriétaire : 90 % calculés sur le montant BRUT (garanti, pas impacté par les frais)
+  - Agence + Plateforme : 10 % calculés sur le montant BRUT
+    └ Les frais FedaPay (1.8 % MTN / 4 % MOOV) sont déduits de ces 10 %
+    └ Agence reçoit 80 % du net agence+plateforme (soit ~8 % du brut - sa part des frais)
+    └ Plateforme garde 20 % du net agence+plateforme (soit ~2 % du brut - sa part des frais)
+      → reste sur le compte principal FedaPay, pas de sous-compte
 
-Le split est calculé par soustraction successive (ROUND_DOWN sur les 3 premières parts,
-remainder pour la 4e) pour garantir que la somme == montant_total sans arrondi parasite.
+Taux FedaPay par moyen de paiement (Bénin) :
+  MTN Mobile Money : 1.8 %
+  MOOV Money       : 4.0 %
 """
-import uuid
-from datetime import date
 from decimal import Decimal, ROUND_DOWN
-from loguru import logger
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
-from fastapi import HTTPException, status
-from app.models.contrat import Contrat
-from app.models.bien import Bien
-from app.models.locataire import Locataire
-from app.models.transaction import Transaction
-from app.schemas.transaction import PaiementResultat, BatchPaiementResultat
-from app.modules.telegram.notifications import send_notification
+from typing import Literal
+from app.modules.payments.providers.base import SplitEntry
 
-_TAUX_PROPRIETAIRE = Decimal("89")
-_TAUX_AGENCE = Decimal("8")
-_TAUX_PLATEFORME = Decimal("2")
+_TAUX_PROPRIO = Decimal("90")
+_TAUX_AGENCE_PLATEFORME = Decimal("10")
+_TAUX_AGENCE_SUR_NET = Decimal("80")   # 8/10 du bloc agence+plateforme
 _CENT = Decimal("100")
 _CENTIME = Decimal("0.01")
 
+TAUX_FEDAPAY: dict[str, Decimal] = {
+    "mtn":  Decimal("1.8"),
+    "moov": Decimal("4.0"),
+}
 
-def calculer_split(montant: Decimal, has_agence: bool = True) -> dict[str, Decimal]:
-    """Retourne les 4 parts de répartition dont la somme == montant."""
-    part_plateforme = (montant * _TAUX_PLATEFORME / _CENT).quantize(_CENTIME, rounding=ROUND_DOWN)
-    part_agence = (montant * _TAUX_AGENCE / _CENT).quantize(_CENTIME, rounding=ROUND_DOWN) if has_agence else Decimal("0")
-    # fix: sans agence, une seule opération sur 97 % pour éviter un double arrondi
-    # (deux ROUND_DOWN indépendants peuvent différer d'1 centime d'un arrondi unique)
-    taux_proprio = _TAUX_PROPRIETAIRE if has_agence else _TAUX_PROPRIETAIRE + _TAUX_AGENCE
-    part_proprietaire = (montant * taux_proprio / _CENT).quantize(_CENTIME, rounding=ROUND_DOWN)
-    # Maintenance = remainder pour garantir total == montant
-    part_maintenance = montant - part_proprietaire - part_agence - part_plateforme
+
+def calculer_split(
+    montant_brut: Decimal,
+    operateur: Literal["mtn", "moov"] = "mtn",
+    has_agence: bool = True,
+    ref_proprietaire: str | None = None,
+    ref_agence: str | None = None,
+    ref_plateforme: str | None = None,
+) -> dict:
+    """
+    Retourne les montants et la liste des SplitEntry FedaPay.
+
+    Le propriétaire reçoit 90 % du brut via son sous-compte.
+    L'agence reçoit sa part du net via son sous-compte.
+    La plateforme garde le reste sur le compte principal (pas de SplitEntry).
+    """
+    taux_fedapay = TAUX_FEDAPAY.get(operateur, Decimal("1.8"))
+
+    # Part propriétaire — sur le brut, arrondie au centime inférieur
+    part_proprio = (montant_brut * _TAUX_PROPRIO / _CENT).quantize(_CENTIME, rounding=ROUND_DOWN)
+
+    # Bloc agence+plateforme — 10 % du brut
+    bloc_ap = montant_brut - part_proprio
+
+    # Frais FedaPay prélevés sur le montant total — répercutés uniquement sur le bloc 10 %
+    frais = (montant_brut * taux_fedapay / _CENT).quantize(_CENTIME, rounding=ROUND_DOWN)
+    net_ap = bloc_ap - frais
+    if net_ap < Decimal("0"):
+        net_ap = Decimal("0")
+
+    if has_agence and net_ap > 0:
+        part_agence = (net_ap * _TAUX_AGENCE_SUR_NET / _CENT).quantize(_CENTIME, rounding=ROUND_DOWN)
+    else:
+        part_agence = Decimal("0")
+
+    part_plateforme = net_ap - part_agence  # reste sur compte principal
+
+    # Construction des SplitEntry (uniquement si sous-compte connu)
+    splits: list[SplitEntry] = []
+    if ref_proprietaire and int(part_proprio) > 0:
+        splits.append(SplitEntry(reference=ref_proprietaire, amount=int(part_proprio)))
+    if ref_agence and has_agence and int(part_agence) > 0:
+        splits.append(SplitEntry(reference=ref_agence, amount=int(part_agence)))
+    if ref_plateforme and int(part_plateforme) > 0:
+        splits.append(SplitEntry(reference=ref_plateforme, amount=int(part_plateforme)))
+
     return {
-        "part_proprietaire": part_proprietaire,
+        "montant_brut": montant_brut,
+        "frais_fedapay": frais,
+        "montant_net": montant_brut - frais,
+        "part_proprietaire": part_proprio,
         "part_agence": part_agence,
         "part_plateforme": part_plateforme,
-        "part_maintenance": part_maintenance,
+        "splits": splits,
     }
-
-
-def _mois_en_cours() -> date:
-    today = date.today()
-    return today.replace(day=1)
-
-
-async def _deja_paye_ce_mois(contrat_id: uuid.UUID, mois: date, db: AsyncSession) -> bool:
-    result = await db.execute(
-        select(Transaction).where(
-            and_(
-                Transaction.contrat_id == contrat_id,
-                Transaction.mois_concerne == mois,
-                Transaction.statut == "complete",
-            )
-        )
-    )
-    return result.scalar_one_or_none() is not None
-
-
-async def executer_paiement_contrat(
-    contrat_id: uuid.UUID,
-    db: AsyncSession,
-    mois_concerne: date | None = None,
-) -> PaiementResultat:
-    """
-    Débite le wallet du locataire et crée la Transaction correspondante.
-    Idempotent : si déjà payé ce mois, retourne statut 'ignore'.
-    """
-    result = await db.execute(
-        select(Contrat, Bien, Locataire)
-        .join(Bien, Contrat.bien_id == Bien.id)
-        .join(Locataire, Contrat.locataire_id == Locataire.id)
-        .where(Contrat.id == contrat_id)
-    )
-    row = result.one_or_none()
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contrat introuvable")
-
-    contrat, bien, locataire = row
-
-    if contrat.statut != "actif":
-        return PaiementResultat(contrat_id=contrat_id, statut="ignore", raison="Contrat non actif")
-
-    mois = mois_concerne or _mois_en_cours()
-
-    if await _deja_paye_ce_mois(contrat_id, mois, db):
-        return PaiementResultat(contrat_id=contrat_id, statut="ignore", raison="Déjà payé ce mois")
-
-    montant = contrat.loyer_montant
-    split = calculer_split(montant, has_agence=bien.agence_id is not None)
-
-    if locataire.wallet_solde >= montant:
-        locataire.wallet_solde -= montant
-        locataire.score_fiabilite = min(100, locataire.score_fiabilite + 1)
-        transaction_statut = "complete"
-    else:
-        locataire.score_fiabilite = max(0, locataire.score_fiabilite - 5)
-        transaction_statut = "echoue"
-
-    # Capturer avant commit (les objets SQLAlchemy expirent après commit)
-    chat_id = locataire.telegram_chat_id
-    solde_dispo = locataire.wallet_solde
-    adresse = bien.adresse
-
-    transaction = Transaction(
-        contrat_id=contrat_id,
-        montant_total=montant,
-        mois_concerne=mois,
-        statut=transaction_statut,
-        **split,
-    )
-    db.add(transaction)
-    await db.commit()
-
-    if transaction_statut == "complete":
-        await send_notification(
-            chat_id,
-            f"Loyer de {montant:,.0f} FCFA payé pour {adresse}.",
-        )
-    else:
-        await send_notification(
-            chat_id,
-            f"Paiement échoué : solde insuffisant "
-            f"({solde_dispo:,.0f} FCFA disponible, {montant:,.0f} FCFA requis).",
-        )
-
-    return PaiementResultat(
-        contrat_id=contrat_id,
-        statut=transaction_statut,
-        montant=montant if transaction_statut == "complete" else None,
-        raison="Solde insuffisant" if transaction_statut == "echoue" else None,
-    )
-
-
-async def executer_paiements_du_jour(db: AsyncSession) -> BatchPaiementResultat:
-    """
-    Déclenche les paiements de tous les contrats actifs dont l'échéance tombe aujourd'hui.
-    Appelé par l'APScheduler (étape 6) — peut aussi être déclenché manuellement.
-    """
-    today = date.today()
-    mois = today.replace(day=1)
-
-    result = await db.execute(
-        select(Contrat).where(
-            and_(Contrat.statut == "actif", Contrat.jour_echeance == today.day)
-        )
-    )
-    contrats = list(result.scalars().all())
-
-    details: list[PaiementResultat] = []
-    reussis = echoues = ignores = 0
-
-    for contrat in contrats:
-        # fix: isolation par paiement — une erreur DB sur un contrat ne bloque pas les suivants
-        try:
-            res = await executer_paiement_contrat(contrat.id, db, mois_concerne=mois)
-        except Exception:
-            logger.exception("Erreur lors du paiement contrat {id}", id=contrat.id)
-            res = PaiementResultat(contrat_id=contrat.id, statut="echoue", raison="Erreur interne")
-            echoues += 1
-            details.append(res)
-            continue
-
-        details.append(res)
-        if res.statut == "complete":
-            reussis += 1
-        elif res.statut == "echoue":
-            echoues += 1
-        else:
-            ignores += 1
-
-    return BatchPaiementResultat(
-        traites=len(contrats),
-        reussis=reussis,
-        echoues=echoues,
-        ignores=ignores,
-        details=details,
-    )

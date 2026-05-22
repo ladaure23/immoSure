@@ -1,12 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueries } from "@tanstack/react-query";
 import {
-  Building2, FileText, UserCheck, TrendingUp,
-  AlertTriangle, Wallet, ArrowUpRight,
+  Building2, UserCheck, TrendingUp,
+  AlertTriangle, ArrowUpRight, MapPin,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { getBiens, getContrats, getLocataires, getContratsRisques } from "../services/api";
+import { getBiens, getContrats, getLocataires, getContratsRisques, getLocations, Location } from "../services/api";
+import type { ContratRisque } from "../services/api";
 
 const MOIS = ["Nov", "Déc", "Jan", "Fév", "Mar", "Avr"];
 const CHART_DATA = MOIS.map((m, i) => ({
@@ -34,36 +35,20 @@ function KpiCard({
   );
 }
 
-function StatutDot({ statut, wallet, loyer }: { statut: string; wallet: number; loyer: number }) {
+function StatutBadge({ statut }: { statut: string }) {
   if (statut === "disponible") return (
     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 text-gray-500 text-xs font-medium">
-      <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
-      Disponible
-    </span>
-  );
-  const taux = loyer > 0 ? (wallet / loyer) * 100 : 0;
-  if (taux >= 100) return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-xs font-medium">
-      <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-      Payé
-    </span>
-  );
-  if (taux >= 30) return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-medium">
-      <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-      En cours
+      <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />Disponible
     </span>
   );
   return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 text-red-700 text-xs font-medium">
-      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-      À risque
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-xs font-medium">
+      <span className="w-1.5 h-1.5 rounded-full bg-green-500" />Loué
     </span>
   );
 }
 
-const fmt = (n: number) =>
-  new Intl.NumberFormat("fr-FR").format(n) + " FCFA";
+const fmt = (n: number) => new Intl.NumberFormat("fr-FR").format(n) + " FCFA";
 
 export default function DashboardHome() {
   const { data: rawBiens } = useQuery({ queryKey: ["biens"], queryFn: getBiens });
@@ -75,27 +60,30 @@ export default function DashboardHome() {
   const contrats = Array.isArray(rawContrats) ? rawContrats : [];
   const locataires = Array.isArray(rawLocataires) ? rawLocataires : [];
   const risques = Array.isArray(rawRisques) ? rawRisques : [];
+  void locataires; // utilisé uniquement pour le compteur
 
-  const contratsActifs = contrats.filter((c) => c.statut === "actif").length;
-  const biensLoues = biens.filter((b) => b.statut === "loue").length;
+  // Load all locations for all biens
+  const locationQueries = useQueries({
+    queries: biens.map((b) => ({
+      queryKey: ["locations", b.id],
+      queryFn: () => getLocations(b.id),
+    })),
+  });
+  const allLocations: Location[] = locationQueries.flatMap((q) => Array.isArray(q.data) ? q.data : []);
+  const bienMap = Object.fromEntries(biens.map((b) => [b.id, b]));
+  const contratsActifs = contrats.filter((c) => c.statut === "actif");
+  const locationsLouees = allLocations.filter((l) => l.statut === "loue").length;
 
-  const locataireMap = Object.fromEntries(locataires.map((l) => [l.id, l]));
-  const biensAvecStatut = biens.map((b) => {
-    const contrat = contrats.find((c) => c.bien_id === b.id && c.statut === "actif");
-    const locataire = contrat ? locataireMap[contrat.locataire_id] : null;
-    return {
-      ...b,
-      wallet: locataire?.wallet_solde ?? 0,
-      loyer: contrat?.loyer_montant ?? b.loyer_mensuel,
-    };
+  const locationsAvecStatut = allLocations.map((loc) => {
+    const contrat = contratsActifs.find((c) => c.location_id === loc.id);
+    const bien = bienMap[loc.bien_id];
+    return { ...loc, bien, loyer: contrat?.loyer_montant ?? loc.loyer_mensuel };
   });
 
   const tauxRecouvrement =
     risques.length === 0
       ? 100
-      : Math.round(
-          (risques.filter((r) => r.taux_provisionnement >= 100).length / risques.length) * 100
-        );
+      : Math.round((risques.filter((r) => r.taux_paiement >= 100).length / risques.length) * 100);
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -107,20 +95,21 @@ export default function DashboardHome() {
           value={biens.length}
           icon={Building2}
           color="bg-blue-50 text-[#1a3c6e]"
-          sub={`${biensLoues} loués`}
+          sub={`${allLocations.length} location${allLocations.length > 1 ? "s" : ""}`}
         />
         <KpiCard
-          label="Contrats actifs"
-          value={contratsActifs}
-          icon={FileText}
+          label="Locations louées"
+          value={locationsLouees}
+          icon={MapPin}
           color="bg-green-50 text-[#2ea043]"
-          sub={`${contrats.length} au total`}
+          sub={`sur ${allLocations.length} au total`}
         />
         <KpiCard
           label="Locataires"
           value={locataires.length}
           icon={UserCheck}
           color="bg-purple-50 text-purple-600"
+          sub={`${contratsActifs.length} contrats actifs`}
         />
         <KpiCard
           label="Taux de recouvrement"
@@ -180,12 +169,12 @@ export default function DashboardHome() {
                 <TrendingUp className="w-5 h-5 text-green-500" />
               </div>
               <p className="text-sm font-medium text-gray-700">Aucun risque</p>
-              <p className="text-xs text-gray-400 mt-1">Tous les wallets sont suffisants</p>
+              <p className="text-xs text-gray-400 mt-1">Tous les loyers du mois sont complets</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {risques.slice(0, 4).map((r) => {
-                const taux = r.taux_provisionnement;
+              {risques.slice(0, 4).map((r: ContratRisque) => {
+                const taux = r.taux_paiement;
                 const color = taux < 30 ? "#ef4444" : taux < 70 ? "#f59e0b" : "#2ea043";
                 return (
                   <div key={r.contrat_id} className="space-y-1.5">
@@ -194,17 +183,19 @@ export default function DashboardHome() {
                         <p className="text-xs font-semibold text-gray-800">
                           {r.locataire_prenom} {r.locataire_nom}
                         </p>
-                        <p className="text-[10px] text-gray-400 truncate max-w-[150px]">{r.bien_adresse}</p>
+                        <p className="text-[10px] text-gray-400 truncate max-w-[150px]">
+                          {r.location_nom} — {r.bien_adresse}
+                        </p>
                       </div>
                       <div className="flex items-center gap-1">
-                        <Wallet className="w-3 h-3 text-gray-400" />
+                        <TrendingUp className="w-3 h-3 text-gray-400" />
                         <span className="text-[10px] font-bold" style={{ color }}>{taux}%</span>
                       </div>
                     </div>
                     <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                       <div
                         className="h-full rounded-full transition-all duration-700"
-                        style={{ width: `${taux}%`, backgroundColor: color }}
+                        style={{ width: `${Math.min(taux, 100)}%`, backgroundColor: color }}
                       />
                     </div>
                   </div>
@@ -215,37 +206,42 @@ export default function DashboardHome() {
         </div>
       </div>
 
-      {/* Tableau biens */}
+      {/* Tableau locations */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-[#1a3c6e]">État du parc immobilier</h2>
-          <span className="text-xs text-gray-400">{biens.length} biens</span>
+          <h2 className="text-sm font-semibold text-[#1a3c6e]">État des locations</h2>
+          <span className="text-xs text-gray-400">{locationsAvecStatut.length} unité{locationsAvecStatut.length > 1 ? "s" : ""}</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50">
+                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Location</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Adresse</th>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Type</th>
                 <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Loyer</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Statut</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {biensAvecStatut.length === 0 ? (
+              {locationsAvecStatut.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-5 py-10 text-center text-sm text-gray-400">
-                    Aucun bien enregistré
+                    Aucune location enregistrée
                   </td>
                 </tr>
               ) : (
-                biensAvecStatut.slice(0, 8).map((b) => (
-                  <tr key={b.id} className="hover:bg-gray-50/70 transition-colors">
-                    <td className="px-5 py-3.5 font-medium text-gray-800 max-w-[200px] truncate">{b.adresse}</td>
-                    <td className="px-5 py-3.5 text-gray-500 capitalize">{b.type_bien}</td>
-                    <td className="px-5 py-3.5 text-right text-gray-700 font-medium">{fmt(b.loyer_mensuel)}</td>
+                locationsAvecStatut.slice(0, 8).map((loc) => (
+                  <tr key={loc.id} className="hover:bg-gray-50/70 transition-colors">
                     <td className="px-5 py-3.5">
-                      <StatutDot statut={b.statut} wallet={b.wallet} loyer={b.loyer} />
+                      <p className="font-medium text-gray-800">{loc.nom}</p>
+                      <p className="text-xs text-gray-400 capitalize">{loc.type_location}</p>
+                    </td>
+                    <td className="px-5 py-3.5 text-gray-500 text-xs max-w-[200px] truncate">
+                      {loc.bien?.adresse ?? "—"}
+                    </td>
+                    <td className="px-5 py-3.5 text-right text-gray-700 font-medium">{fmt(loc.loyer)}</td>
+                    <td className="px-5 py-3.5">
+                      <StatutBadge statut={loc.statut} />
                     </td>
                   </tr>
                 ))

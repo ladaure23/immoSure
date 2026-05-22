@@ -2,15 +2,15 @@ import uuid
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
-from app.middleware.auth import get_current_user, require_admin
-from app.schemas.transaction import TransactionRead, DashboardStats, PaiementResultat, BatchPaiementResultat
-from app.schemas.depot_wallet import DepotInitierMtn, DepotResponse
+from app.middleware.auth import get_current_user
+from app.schemas.transaction import TransactionRead, DashboardStats
+from app.schemas.paiement_loyer import PaiementLoyerRead, InitierPaiementPayload, InitierPaiementResponse
+from app.schemas.proprietaire import InvitationFedapayResult
 from app.modules.payments import service
-from app.modules.payments import split_service
 
 router = APIRouter(tags=["payments"])
 
-# --- Transactions (protégées) ---
+# ── Transactions ──────────────────────────────────────────────────────────────
 
 transactions_router = APIRouter(
     prefix="/api/transactions",
@@ -33,55 +33,57 @@ async def get_transaction(transaction_id: uuid.UUID, db: AsyncSession = Depends(
     return await service.get_transaction(transaction_id, db)
 
 
-# --- Wallet dépôts (protégés) ---
+# ── Paiements loyer ───────────────────────────────────────────────────────────
 
-wallet_router = APIRouter(
-    prefix="/api/wallet",
+paiements_router = APIRouter(
+    prefix="/api/paiements",
     dependencies=[Depends(get_current_user)],
 )
 
 
-@wallet_router.post("/depot/mtn", response_model=DepotResponse, status_code=201)
-async def initier_depot_mtn(payload: DepotInitierMtn, db: AsyncSession = Depends(get_db)):
-    return await service.initier_depot_mtn(payload, db)
+@paiements_router.post("/initier", response_model=InitierPaiementResponse, status_code=201)
+async def initier_paiement(payload: InitierPaiementPayload, db: AsyncSession = Depends(get_db)):
+    return await service.initier_paiement_loyer(payload, db)
 
 
-# --- Webhooks (sans JWT — appelés par MTN) ---
+@paiements_router.get("/loyer/{contrat_id}", response_model=list[PaiementLoyerRead])
+async def get_paiements_loyer(contrat_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    return await service.get_paiements_loyer(contrat_id, db)
 
-webhooks_router = APIRouter(prefix="/api/wallet")
+
+# ── Webhooks FedaPay (sans JWT) ───────────────────────────────────────────────
+
+webhooks_router = APIRouter(prefix="/api/webhooks")
 
 
-@webhooks_router.post("/webhook/mtn")
-async def webhook_mtn(request: Request, db: AsyncSession = Depends(get_db)):
+@webhooks_router.post("/fedapay")
+async def webhook_fedapay(request: Request, db: AsyncSession = Depends(get_db)):
     raw = await request.body()
-    return await service.handle_webhook_mtn(raw, db)
+    signature = request.headers.get("X-FEDAPAY-SIGNATURE")
+    return await service.handle_webhook_fedapay(raw, signature, db)
 
 
-# --- Split / paiements automatiques (admin uniquement) ---
+# ── Invitations FedaPay ───────────────────────────────────────────────────────
 
-split_router = APIRouter(prefix="/api", tags=["split"])
-
-
-@split_router.post(
-    "/contrats/{contrat_id}/payer",
-    response_model=PaiementResultat,
-    dependencies=[Depends(require_admin)],
+invitations_router = APIRouter(
+    prefix="/api",
+    dependencies=[Depends(get_current_user)],
 )
-async def payer_contrat(contrat_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    return await split_service.executer_paiement_contrat(contrat_id, db)
 
 
-@split_router.post(
-    "/paiements/executer-jour",
-    response_model=BatchPaiementResultat,
-    dependencies=[Depends(require_admin)],
-)
-async def executer_paiements_du_jour(db: AsyncSession = Depends(get_db)):
-    return await split_service.executer_paiements_du_jour(db)
+@invitations_router.post("/proprietaires/{proprietaire_id}/inviter-fedapay", response_model=InvitationFedapayResult)
+async def inviter_proprietaire(proprietaire_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    return await service.inviter_proprietaire_fedapay(proprietaire_id, db)
 
 
-# Inclure tous les sous-routers dans router principal
+@invitations_router.post("/agences/{agence_id}/inviter-fedapay", response_model=InvitationFedapayResult)
+async def inviter_agence(agence_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    return await service.inviter_agence_fedapay(agence_id, db)
+
+
+# ── Assemblage ────────────────────────────────────────────────────────────────
+
 router.include_router(transactions_router)
-router.include_router(wallet_router)
+router.include_router(paiements_router)
 router.include_router(webhooks_router)
-router.include_router(split_router)
+router.include_router(invitations_router)

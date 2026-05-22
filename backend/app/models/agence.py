@@ -17,6 +17,7 @@ class Agence(Base):
     contact_responsable: Mapped[str | None] = mapped_column(String(200))
     telephone: Mapped[str | None] = mapped_column(String(20))
     email: Mapped[str | None] = mapped_column(String(200))
+    fedapay_sub_account_ref: Mapped[str | None] = mapped_column(String(100), nullable=True)
     statut_partenariat: Mapped[str] = mapped_column(String(50), nullable=False, default="actif")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 

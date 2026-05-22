@@ -8,6 +8,7 @@ class ProprietaireBase(BaseModel):
     nom: str
     prenom: str
     telephone: str
+    email: str | None = None
     compte_mobile_money: str | None = None
     operateur_mobile: Literal["MTN", "MOOV", "WAVE"] | None = None
     whatsapp_id: str | None = None
@@ -24,16 +25,25 @@ class ProprietaireUpdate(BaseModel):
     nom: str | None = None
     prenom: str | None = None
     telephone: str | None = None
+    email: str | None = None
     compte_mobile_money: str | None = None
     operateur_mobile: Literal["MTN", "MOOV", "WAVE"] | None = None
     whatsapp_id: str | None = None
     telegram_chat_id: str | None = None
     localisation: str | None = None
     agence_id: UUID | None = None
+    fedapay_sub_account_ref: str | None = None
 
 
 class ProprietaireRead(ProprietaireBase):
     id: UUID
+    fedapay_sub_account_ref: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class InvitationFedapayResult(BaseModel):
+    success: bool
+    message: str
+    fedapay_ref: str | None = None

@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Ticket, Wrench, MessageCircle, CreditCard, Clock, CheckCircle2, AlertCircle } from "lucide-react";
-import { getTickets, getContrats, getBiens, getLocataires, createTicket, updateTicket, TypeTicket, StatutTicket } from "../services/api";
+import { getTickets, getContrats, getBiens, getLocataires, getLocations, createTicket, updateTicket, TypeTicket, StatutTicket, Location } from "../services/api";
 import Modal from "../components/ui/Modal";
 import toast from "react-hot-toast";
 
@@ -37,9 +37,18 @@ export default function TicketsPage() {
   const biens = Array.isArray(rawBiens) ? rawBiens : [];
   const locataires = Array.isArray(rawLocataires) ? rawLocataires : [];
 
+  const locationQueries = useQueries({
+    queries: biens.map((b) => ({
+      queryKey: ["locations", b.id],
+      queryFn: () => getLocations(b.id),
+    })),
+  });
+  const allLocations: Location[] = locationQueries.flatMap((q) => Array.isArray(q.data) ? q.data : []);
+
   const bienMap = Object.fromEntries(biens.map((b) => [b.id, b]));
   const locMap = Object.fromEntries(locataires.map((l) => [l.id, l]));
   const contratMap = Object.fromEntries(contrats.map((c) => [c.id, c]));
+  const locationMap = Object.fromEntries(allLocations.map((l) => [l.id, l]));
 
   const createMutation = useMutation({
     mutationFn: createTicket,
@@ -123,7 +132,8 @@ export default function TicketsPage() {
         <div className="space-y-3">
           {filtered.map((t) => {
             const contrat = contratMap[t.contrat_id];
-            const bien = contrat ? bienMap[contrat.bien_id] : null;
+            const location = contrat ? locationMap[contrat.location_id] : null;
+            const bien = location ? bienMap[location.bien_id] : null;
             const loc = contrat ? locMap[contrat.locataire_id] : null;
             const typeConf = TYPE_CONFIG[t.type_ticket];
             const statutConf = STATUT_CONFIG[t.statut];
@@ -190,11 +200,12 @@ export default function TicketsPage() {
               className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg outline-none focus:border-[#1a3c6e] focus:ring-2 focus:ring-[#1a3c6e]/10 bg-white">
               <option value="">Sélectionner un contrat</option>
               {contrats.filter((c) => c.statut === "actif").map((c) => {
-                const bien = bienMap[c.bien_id];
+                const location = locationMap[c.location_id];
+                const bien = location ? bienMap[location.bien_id] : null;
                 const loc = locMap[c.locataire_id];
                 return (
                   <option key={c.id} value={c.id}>
-                    {bien?.adresse ?? "?"} — {loc ? `${loc.prenom} ${loc.nom}` : "?"}
+                    {location?.nom ?? "?"} — {bien?.adresse ?? "?"} — {loc ? `${loc.prenom} ${loc.nom}` : "?"}
                   </option>
                 );
               })}

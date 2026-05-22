@@ -11,6 +11,7 @@ from sqlalchemy import select
 
 from app.models.transaction import Transaction
 from app.models.contrat import Contrat
+from app.models.location import Location
 from app.models.bien import Bien
 from app.models.locataire import Locataire
 from app.models.proprietaire import Proprietaire
@@ -22,9 +23,10 @@ _TZ_BENIN = ZoneInfo("Africa/Porto-Novo")
 
 async def generate_quittance(transaction_id: uuid.UUID, db: AsyncSession) -> bytes | None:
     result = await db.execute(
-        select(Transaction, Contrat, Bien, Locataire, Proprietaire)
+        select(Transaction, Contrat, Location, Bien, Locataire, Proprietaire)
         .join(Contrat, Transaction.contrat_id == Contrat.id)
-        .join(Bien, Contrat.bien_id == Bien.id)
+        .join(Location, Contrat.location_id == Location.id)
+        .join(Bien, Location.bien_id == Bien.id)
         .join(Locataire, Contrat.locataire_id == Locataire.id)
         .join(Proprietaire, Bien.proprietaire_id == Proprietaire.id)
         .where(Transaction.id == transaction_id)
@@ -33,7 +35,7 @@ async def generate_quittance(transaction_id: uuid.UUID, db: AsyncSession) -> byt
     if not row:
         return None
 
-    transaction, contrat, bien, locataire, proprietaire = row
+    transaction, contrat, location, bien, locataire, proprietaire = row
 
     if transaction.statut != "complete":
         return None

@@ -7,6 +7,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
 
     # Application
@@ -18,11 +19,11 @@ class Settings(BaseSettings):
     # Database
     database_url: str
 
-    # MTN Mobile Money
-    mtn_subscription_key: str = ""
-    mtn_api_user: str = ""
-    mtn_api_key: str = ""
-    mtn_env: Literal["sandbox", "production"] = "sandbox"
+    # FedaPay Marketplace
+    fedapay_secret_key: str = ""
+    fedapay_webhook_secret: str = ""
+    fedapay_env: Literal["sandbox", "production"] = "sandbox"
+    fedapay_platform_account_ref: str = ""
 
     # Telegram
     telegram_bot_token: str = ""
@@ -37,12 +38,6 @@ class Settings(BaseSettings):
     scheduler_timezone: str = "Africa/Porto-Novo"
     notification_hour: int = 9
     notification_minute: int = 0
-
-    @property
-    def mtn_base_url(self) -> str:
-        if self.mtn_env == "sandbox":
-            return "https://sandbox.momodeveloper.mtn.com"
-        return "https://proxy.momoapi.mtn.com"
 
     @property
     def is_production(self) -> bool:

@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Phone, MapPin, Wallet, CheckCircle2, Clock } from "lucide-react";
+import { AlertTriangle, Phone, MapPin, TrendingUp, CheckCircle2, Clock } from "lucide-react";
 import { getContratsRisques, ContratRisque } from "../services/api";
 
 const fmt = (n: number) => new Intl.NumberFormat("fr-FR").format(n) + " FCFA";
 
 function RiskCard({ r }: { r: ContratRisque }) {
-  const taux = r.taux_provisionnement;
+  const taux = r.taux_paiement;
   const couleur = taux < 30 ? { bg: "bg-red-50", border: "border-red-200", bar: "#ef4444", badge: "bg-red-100 text-red-700", text: "text-red-600" }
     : taux < 70 ? { bg: "bg-amber-50", border: "border-amber-200", bar: "#f59e0b", badge: "bg-amber-100 text-amber-700", text: "text-amber-600" }
     : { bg: "bg-green-50", border: "border-green-200", bar: "#2ea043", badge: "bg-green-100 text-green-700", text: "text-green-600" };
@@ -48,16 +48,19 @@ function RiskCard({ r }: { r: ContratRisque }) {
       <div className="px-5 py-4 space-y-3">
         <div className="flex items-start gap-2">
           <MapPin className="w-3.5 h-3.5 text-gray-400 mt-0.5 flex-shrink-0" />
-          <p className="text-xs text-gray-600 leading-relaxed">{r.bien_adresse}</p>
+          <div>
+            <p className="text-xs font-medium text-gray-700">{r.location_nom}</p>
+            <p className="text-[11px] text-gray-500">{r.bien_adresse}</p>
+          </div>
         </div>
 
         {/* Barre de progression */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-xs">
             <div className="flex items-center gap-1.5">
-              <Wallet className="w-3 h-3 text-gray-400" />
-              <span className="text-gray-500">Wallet :</span>
-              <span className="font-semibold text-gray-800">{fmt(r.wallet_solde)}</span>
+              <TrendingUp className="w-3 h-3 text-gray-400" />
+              <span className="text-gray-500">Payé :</span>
+              <span className="font-semibold text-gray-800">{fmt(r.total_paye)}</span>
             </div>
             <span className="text-gray-400">/ {fmt(r.loyer_montant)}</span>
           </div>
@@ -69,7 +72,7 @@ function RiskCard({ r }: { r: ContratRisque }) {
           </div>
           <div className="flex items-center justify-between">
             <span className={`text-[11px] font-semibold ${couleur.text}`}>
-              {taux >= 100 ? "Wallet suffisant" : `Il manque ${fmt(r.loyer_montant - r.wallet_solde)}`}
+              {taux >= 100 ? "Loyer complet" : `Reste ${fmt(r.loyer_montant - r.total_paye)}`}
             </span>
             <div className="flex items-center gap-1">
               <Clock className="w-3 h-3 text-gray-400" />
@@ -93,9 +96,9 @@ export default function RisquesPage() {
     refetchInterval: 60_000,
   });
 
-  const critique = risques.filter((r) => r.taux_provisionnement < 30);
-  const attention = risques.filter((r) => r.taux_provisionnement >= 30 && r.taux_provisionnement < 70);
-  const suffisant = risques.filter((r) => r.taux_provisionnement >= 70);
+  const critique = risques.filter((r) => r.taux_paiement < 30);
+  const attention = risques.filter((r) => r.taux_paiement >= 30 && r.taux_paiement < 70);
+  const suffisant = risques.filter((r) => r.taux_paiement >= 70);
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -111,7 +114,7 @@ export default function RisquesPage() {
               </span>
             )}
           </div>
-          <p className="text-xs text-gray-400">Locataires dont le wallet est insuffisant pour couvrir le loyer</p>
+          <p className="text-xs text-gray-400">Contrats dont le loyer du mois en cours n'est pas encore complet</p>
         </div>
         <div className="sm:ml-auto flex gap-3">
           <div className="flex items-center gap-1.5 text-xs text-red-600 font-medium">

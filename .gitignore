@@ -38,3 +38,5 @@ uploads/
 
 # PM2
 .pm2/
+.claude/
+ARCHITECTURE.md

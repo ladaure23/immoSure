@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, UserCheck, Search, Wallet } from "lucide-react";
+import { Plus, UserCheck, Search } from "lucide-react";
 import { getLocataires, getContrats, createLocataire } from "../services/api";
 import Modal from "../components/ui/Modal";
 import toast from "react-hot-toast";
@@ -87,7 +87,7 @@ export default function LocatairesPage() {
               <tr className="bg-gray-50 border-b border-gray-100">
                 <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Locataire</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Téléphone</th>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-52">Wallet</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-52">Loyer mensuel</th>
                 <th className="text-center px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Score</th>
                 <th className="text-center px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Contrats</th>
               </tr>
@@ -112,8 +112,6 @@ export default function LocatairesPage() {
                 filtered.map((l) => {
                   const info = contratsActifsByLoc[l.id];
                   const loyer = info?.loyer ?? 0;
-                  const taux = loyer > 0 ? Math.min(100, Math.round((l.wallet_solde / loyer) * 100)) : 0;
-                  const barColor = taux >= 100 ? "#2ea043" : taux >= 30 ? "#f59e0b" : "#ef4444";
 
                   return (
                     <tr key={l.id} className="hover:bg-gray-50/70 transition-colors">
@@ -129,30 +127,11 @@ export default function LocatairesPage() {
                       </td>
                       <td className="px-5 py-3.5 text-gray-500">{l.telephone}</td>
                       <td className="px-5 py-3.5">
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1">
-                              <Wallet className="w-3 h-3 text-gray-400" />
-                              <span className="text-xs font-medium text-gray-700">{fmt(l.wallet_solde)}</span>
-                            </div>
-                            {loyer > 0 && (
-                              <span className="text-[10px] font-bold" style={{ color: barColor }}>
-                                {taux}%
-                              </span>
-                            )}
-                          </div>
-                          {loyer > 0 && (
-                            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden w-40">
-                              <div
-                                className="h-full rounded-full transition-all duration-500"
-                                style={{ width: `${taux}%`, backgroundColor: barColor }}
-                              />
-                            </div>
-                          )}
-                          {loyer > 0 && (
-                            <p className="text-[10px] text-gray-400">Loyer : {fmt(loyer)}</p>
-                          )}
-                        </div>
+                        {loyer > 0 ? (
+                          <span className="text-sm font-semibold text-gray-700">{fmt(loyer)}</span>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
                       </td>
                       <td className="px-5 py-3.5 text-center">
                         <ScoreBadge score={l.score_fiabilite} />

@@ -34,6 +34,7 @@ class AgenceUpdate(BaseModel):
     telephone: str | None = None
     email: EmailStr | None = None
     statut_partenariat: str | None = None
+    fedapay_sub_account_ref: str | None = None
 
     @field_validator("commission_taux")
     @classmethod
@@ -45,6 +46,7 @@ class AgenceUpdate(BaseModel):
 
 class AgenceRead(AgenceBase):
     id: UUID
+    fedapay_sub_account_ref: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

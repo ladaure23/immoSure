@@ -163,7 +163,7 @@
   <h2>Détail de la répartition</h2>
   <table>
     <tr>
-      <td>Part propriétaire (89 %)</td>
+      <td>Part propriétaire (90 %)</td>
       <td>{{ "{:,.0f}".format(transaction.part_proprietaire).replace(",", " ") }} FCFA</td>
     </tr>
     <tr>
@@ -174,10 +174,12 @@
       <td>Frais plateforme ImmoSure (2 %)</td>
       <td>{{ "{:,.0f}".format(transaction.part_plateforme).replace(",", " ") }} FCFA</td>
     </tr>
+    {% if transaction.frais_fedapay %}
     <tr>
-      <td>Fonds maintenance (1 %)</td>
-      <td>{{ "{:,.0f}".format(transaction.part_maintenance).replace(",", " ") }} FCFA</td>
+      <td>Frais opérateur mobile</td>
+      <td>{{ "{:,.0f}".format(transaction.frais_fedapay).replace(",", " ") }} FCFA</td>
     </tr>
+    {% endif %}
     <tr>
       <td><strong>Total payé</strong></td>
       <td>{{ "{:,.0f}".format(transaction.montant_total).replace(",", " ") }} FCFA</td>

@@ -1,12 +1,18 @@
 from abc import ABC, abstractmethod
 from decimal import Decimal
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
 class InitiationResult:
-    reference: str      # identifiant côté provider (pour matcher le webhook)
-    payment_url: str = ""  # vide pour les providers USSD-push (ex: MTN)
+    reference: str          # fedapay_transaction_id
+    payment_url: str = ""   # URL de paiement à envoyer au locataire
+
+
+@dataclass
+class SplitEntry:
+    reference: str   # acc_xxxxxx du sous-compte FedaPay
+    amount: int      # montant en XOF (entier)
 
 
 class PaymentProvider(ABC):
@@ -15,13 +21,15 @@ class PaymentProvider(ABC):
         self,
         montant: Decimal,
         telephone: str,
-        depot_id: str,
-        description: str = "Dépôt wallet ImmoSure",
+        description: str,
+        splits: list[SplitEntry],
+        metadata: dict | None = None,
     ) -> InitiationResult: ...
 
     @abstractmethod
     def verifier_signature_webhook(self, payload_bytes: bytes, signature: str | None) -> bool: ...
 
-    async def verifier_transaction(self, reference: str) -> bool:
-        """Re-vérifie le statut côté provider avant de créditer. Override pour les providers sans HMAC."""
-        return True
+    @abstractmethod
+    async def inviter_sous_compte(self, email: str, full_name: str) -> str:
+        """Envoie une invitation FedaPay et retourne la référence du sous-compte."""
+        ...

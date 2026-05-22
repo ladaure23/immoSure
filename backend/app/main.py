@@ -16,6 +16,7 @@ from app.modules.agences.router import router as agences_router
 from app.modules.proprietaires.router import router as proprietaires_router
 from app.modules.locataires.router import router as locataires_router
 from app.modules.biens.router import router as biens_router
+from app.modules.locations.router import router as locations_router
 from app.modules.contrats.router import router as contrats_router
 from app.modules.payments.router import router as payments_router
 from app.modules.tickets.router import router as tickets_router
@@ -104,6 +105,7 @@ app.include_router(agences_router)
 app.include_router(proprietaires_router)
 app.include_router(locataires_router)
 app.include_router(biens_router)
+app.include_router(locations_router)
 app.include_router(contrats_router)
 app.include_router(payments_router)
 app.include_router(tickets_router)

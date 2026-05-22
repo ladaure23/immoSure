@@ -18,6 +18,8 @@ class Proprietaire(Base):
     whatsapp_id: Mapped[str | None] = mapped_column(String(100))
     telegram_chat_id: Mapped[str | None] = mapped_column(String(100))
     localisation: Mapped[str | None] = mapped_column(String(300))
+    email: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    fedapay_sub_account_ref: Mapped[str | None] = mapped_column(String(100), nullable=True)
     agence_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("agences.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
